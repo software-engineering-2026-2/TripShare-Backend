@@ -1,0 +1,12 @@
+services:
+  backend-tripshare:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tripshare-backend:latest
+    container_name: tripshare-api
+    ports:
+      - "8080:8080"
+    environment:
+      - GIN_MODE=release
+    restart: unless-stopped
