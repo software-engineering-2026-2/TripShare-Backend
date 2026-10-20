@@ -4,6 +4,12 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## Skills
+
+- Before implementing, identify relevant skills in `.agents/skills/`.
+- Read the `SKILL.md` files for applicable skills and follow their instructions.
+- Use only skills compatible with the current stack and task.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
