@@ -4,7 +4,6 @@ CREATE TABLE users (
     name varchar(120) NOT NULL,
     email varchar(254) NOT NULL,
     phone varchar(32),
-    password_hash text NOT NULL,
     bio text,
     hometown text,
     role text NOT NULL DEFAULT 'USER',

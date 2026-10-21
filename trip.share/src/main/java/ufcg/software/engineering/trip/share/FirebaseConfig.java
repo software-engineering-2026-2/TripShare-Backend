@@ -1,3 +1,5 @@
+package ufcg.software.engineering.trip.share;
+
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -18,7 +20,7 @@ public class FirebaseConfig {
             return FirebaseApp.getInstance();
         }
         // Carrega o arquivo JSON da pasta resources de forma segura
-        ClassPathResource resource = new ClassPathResource("tripshare-e3137-firebase-adminsdk-fbsvc-a8d3e623a8.json");
+        ClassPathResource resource = new ClassPathResource("tripshare-firebase-key.json");
         try (InputStream in = resource.getInputStream()) {
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(resource.getInputStream()))
