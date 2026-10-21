@@ -12,8 +12,14 @@ RUN ./mvnw dependency:go-offline -B
 COPY src ./src
 RUN ./mvnw clean verify -B
 
+# Mesmo motor e dependências de migração da aplicação, em arquitetura nativa.
+FROM build AS migrate
+ENV FLYWAY_IGNORE_MIGRATION_PATTERNS=""
+ENTRYPOINT ["./mvnw", "-o", "-B"]
+CMD ["flyway:migrate"]
+
 # Estágio 2: runtime
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre AS runtime
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar

@@ -199,3 +199,9 @@ README.html
 *.iml
 .idea
 .exercism
+
+# Local database credentials and backups
+.env
+.env.*
+!.env.example
+.old/
