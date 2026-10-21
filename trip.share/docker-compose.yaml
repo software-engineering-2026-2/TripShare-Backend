@@ -12,6 +12,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      FIREBASE_KEY_PATH: ${FIREBASE_KEY_PATH:-tripshare-firebase-key.json}
     depends_on:
       postgres:
         condition: service_healthy
