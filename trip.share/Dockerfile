@@ -1,17 +1,25 @@
 # Estágio 1: build
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
 # Baixa as dependências primeiro (aproveita cache do Docker)
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+COPY --chmod=755 mvnw ./mvnw
+COPY .mvn ./.mvn
+RUN ./mvnw dependency:go-offline -B
 
 # Copia o código e gera o JAR
 COPY src ./src
-RUN mvn clean package -DskipTests -B
+RUN ./mvnw clean verify -B
+
+# Mesmo motor e dependências de migração da aplicação, em arquitetura nativa.
+FROM build AS migrate
+ENV FLYWAY_IGNORE_MIGRATION_PATTERNS=""
+ENTRYPOINT ["./mvnw", "-o", "-B"]
+CMD ["flyway:migrate"]
 
 # Estágio 2: runtime
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre AS runtime
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
