@@ -1,14 +1,16 @@
 # Estágio 1: build
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
 # Baixa as dependências primeiro (aproveita cache do Docker)
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+COPY --chmod=755 mvnw ./mvnw
+COPY .mvn ./.mvn
+RUN ./mvnw dependency:go-offline -B
 
 # Copia o código e gera o JAR
 COPY src ./src
-RUN mvn clean package -DskipTests -B
+RUN ./mvnw clean verify -B
 
 # Estágio 2: runtime
 FROM eclipse-temurin:17-jre
