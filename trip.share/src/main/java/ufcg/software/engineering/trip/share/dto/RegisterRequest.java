@@ -1,5 +1,6 @@
 package ufcg.software.engineering.trip.share.dto;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
@@ -22,8 +23,12 @@ public record RegisterRequest(
 
         @NotBlank(message="Password confirmation is required")
         String confirmPassword
-
-
 ) {
+        @AssertTrue(message="Password and confirmation must match")
+        public boolean isPasswordMatching() {
+                return password != null && password.equals(confirmPassword);
+        }
+
+
 }
 
