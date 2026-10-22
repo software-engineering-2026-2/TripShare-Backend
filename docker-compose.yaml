@@ -3,7 +3,7 @@ services:
   spring:
     profiles: ["app"]
     build:
-      context: .
+      context: ./trip.share
       target: runtime
     container_name: ${SPRING_CONTAINER_NAME:-spring-app}
     ports:
@@ -21,7 +21,7 @@ services:
   migrate:
     profiles: ["tools", "app"]
     build:
-      context: .
+      context: ./trip.share
       target: migrate
     environment:
       FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}

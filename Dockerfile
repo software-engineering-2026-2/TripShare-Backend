@@ -3,13 +3,13 @@ FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 
 # Baixa as dependências primeiro (aproveita cache do Docker)
-COPY pom.xml .
-COPY --chmod=755 mvnw ./mvnw
-COPY .mvn ./.mvn
+COPY ./trip.share/pom.xml .
+COPY --chmod=755 ./trip.share/mvnw ./mvnw
+COPY ./trip.share/.mvn ./.mvn
 RUN ./mvnw dependency:go-offline -B
 
 # Copia o código e gera o JAR
-COPY src ./src
+COPY ./trip.share/src ./src
 RUN ./mvnw clean verify -B
 
 # Mesmo motor e dependências de migração da aplicação, em arquitetura nativa.
