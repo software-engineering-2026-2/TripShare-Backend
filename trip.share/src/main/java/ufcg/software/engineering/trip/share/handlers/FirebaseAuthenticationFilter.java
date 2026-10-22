@@ -21,7 +21,8 @@ import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
  */
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final String BEARER_PREFIX = "Bearer ";
+    // o auth-scheme é case-insensitive por RFC 9110 §11.1 (aceita "Bearer", "bearer", "BEARER", ...)
+    private static final String BEARER_PREFIX = "bearer ";
 
     private final FirebaseTokenService tokenService;
 
@@ -33,7 +34,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (header != null && header.startsWith(BEARER_PREFIX)) {
+        if (header != null && header.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
             String idToken = header.substring(BEARER_PREFIX.length()).trim();
             if (!idToken.isEmpty()) {
                 try {

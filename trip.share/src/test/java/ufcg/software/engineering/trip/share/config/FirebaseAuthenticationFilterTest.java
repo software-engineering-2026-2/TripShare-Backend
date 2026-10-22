@@ -79,6 +79,26 @@ class FirebaseAuthenticationFilterTest {
     }
 
     @Test
+    void shouldAuthenticate_whenBearerSchemeIsNotExactCase() throws FirebaseAuthException, ServletException, IOException {
+        // auth-scheme é case-insensitive por RFC 9110 §11.1: "bearer"/"BEARER" deve autenticar
+        FirebaseToken token = mock(FirebaseToken.class);
+        when(token.getUid()).thenReturn("uid-2");
+        when(tokenService.validate("id-token")).thenReturn(token);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
+        request.addHeader("Authorization", "bearer id-token");
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, chain);
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication).isNotNull();
+        assertThat(authentication.getPrincipal()).isEqualTo("uid-2");
+        verify(tokenService).validate("id-token");
+    }
+
+    @Test
     void shouldNotAuthenticate_whenSchemeIsNotBearer() throws ServletException, IOException {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
         request.addHeader("Authorization", "Basic dXNlcjpwYXNz");
