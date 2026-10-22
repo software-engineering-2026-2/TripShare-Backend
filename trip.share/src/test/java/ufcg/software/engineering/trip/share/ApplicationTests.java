@@ -12,10 +12,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.auth.FirebaseAuth;
 
 @SpringBootTest
 @ActiveProfiles("test")
 class ApplicationTests {
+
+	@MockitoBean
+	private FirebaseApp firebaseApp;
+
+	@MockitoBean
+	private FirebaseAuth firebaseAuth;
 
 	@Autowired
 	private DataSource dataSource;

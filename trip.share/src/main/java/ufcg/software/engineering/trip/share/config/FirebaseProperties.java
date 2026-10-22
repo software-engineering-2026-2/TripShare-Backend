@@ -10,5 +10,9 @@ import org.springframework.validation.annotation.Validated;
  */
 @ConfigurationProperties(prefix = "app.firebase")
 @Validated
-public record FirebaseProperties(@NotBlank String keyPath) {
+public record FirebaseProperties(@NotBlank String keyPath, @NotBlank String webApiKey) {
+    @Override
+    public String toString() {
+        return "FirebaseProperties[keyPath=" + keyPath + ", webApiKey=[REDACTED]]";
+    }
 }

@@ -1,6 +1,6 @@
 # Dicionário de dados — TripShare
 
-PostgreSQL 16, migrations V1–V6. Gerado a partir do catálogo real; SQL versionado é a fonte de verdade.
+PostgreSQL 16, migrations V1–V7. Baseado no catálogo e atualizado com a identidade Firebase; SQL versionado é a fonte de verdade.
 
 Ver [modelagem, regras, diagrama e requisitos](database.md). `NULL` representa informação opcional ou desconhecida.
 
@@ -739,7 +739,7 @@ CREATE INDEX idx_user_sessions_user ON public.user_sessions USING btree (user_id
 | `name` | `character varying(120)` | Não | `—` |
 | `email` | `character varying(254)` | Não | `—` |
 | `phone` | `character varying(32)` | Sim | `—` |
-| `password_hash` | `text` | Não | `—` |
+| `firebase_uid` | `character varying(128)` | Sim | `—` |
 | `bio` | `text` | Sim | `—` |
 | `hometown` | `text` | Sim | `—` |
 | `role` | `text` | Não | `'USER'::text` |
@@ -753,11 +753,11 @@ Constraints:
 ```sql
 ck_users_email: CHECK (((btrim((email)::text) <> ''::text) AND ((email)::text = btrim((email)::text))));
 ck_users_name: CHECK ((btrim((name)::text) <> ''::text));
-ck_users_password_hash: CHECK ((length(password_hash) >= 60));
 ck_users_role: CHECK ((role = ANY (ARRAY['USER'::text, 'ADMIN'::text])));
 ck_users_status: CHECK ((status = ANY (ARRAY['ACTIVE'::text, 'SUSPENDED'::text])));
 ck_users_username: CHECK ((btrim((username)::text) <> ''::text));
 pk_users: PRIMARY KEY (id);
+uq_users_firebase_uid: UNIQUE (firebase_uid);
 ```
 
 Índices adicionais:

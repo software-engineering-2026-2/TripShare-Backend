@@ -207,3 +207,4 @@ README.html
 .old/
 
 /trip.share/src/main/resources/firebase/tripshare-firebase-key.json
+.secrets/

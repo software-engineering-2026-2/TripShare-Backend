@@ -119,7 +119,7 @@ class DatabaseMigrationIT {
 
     @Test
     void migrate_emptyDatabase_shouldCreateSchemaAndOnlyReferenceData() throws SQLException {
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(6);
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(7);
         assertThat(count("SELECT count(*) FROM categories")).isEqualTo(7);
         assertThat(count("SELECT count(*) FROM travel_paces")).isEqualTo(3);
         assertThat(count("SELECT count(*) FROM transport_modes")).isEqualTo(4);
@@ -127,7 +127,7 @@ class DatabaseMigrationIT {
         assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"))
             .isEqualTo(28); // 27 domain tables plus Flyway history.
         assertThat(flyway().migrate().migrationsExecuted).isZero();
-        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(6);
+        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
     }
 
     @Test
@@ -135,7 +135,7 @@ class DatabaseMigrationIT {
         var earlier = Flyway.configure().configuration(flyway().getConfiguration()).target("2").load();
         earlier.migrate();
         execute("INSERT INTO users(username, name, email) VALUES ('existing', 'Existing User', 'existing@example.invalid')");
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(4);
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(5);
         assertThat(value("SELECT name FROM users WHERE username = 'existing'")).isEqualTo("Existing User");
     }
 
@@ -145,8 +145,8 @@ class DatabaseMigrationIT {
         try {
             List<Callable<Integer>> tasks = List.of(() -> flyway().migrate().migrationsExecuted, () -> flyway().migrate().migrationsExecuted);
             var results = executor.invokeAll(tasks);
-            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(6);
-            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(6);
+            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(7);
+            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
         } finally {
             executor.shutdownNow();
         }
@@ -191,6 +191,20 @@ class DatabaseMigrationIT {
         assertThatThrownBy(() -> flyway().migrate()).isInstanceOf(FlywayException.class).hasMessageContaining("non-empty");
         assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'existing_data'"))
             .isEqualTo(1);
+    }
+
+    @Test
+    void migrate_v7_shouldPreserveUsersAndRequireUniqueFirebaseUid() throws SQLException {
+        Flyway.configure().configuration(flyway().getConfiguration()).target("6").load().migrate();
+        execute("INSERT INTO users(username, name, email) VALUES ('existing', 'Existing User', 'existing@example.invalid')");
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(value("SELECT name FROM users WHERE username = 'existing'")).isEqualTo("Existing User");
+        assertThat(value("SELECT firebase_uid FROM users WHERE username = 'existing'")).isNull();
+        execute("UPDATE users SET firebase_uid = 'firebase-uid' WHERE username = 'existing'");
+        rejected("INSERT INTO users(username, name, email, firebase_uid) VALUES ('other', 'Other', 'other@example.invalid', 'firebase-uid')");
+        rejected("UPDATE users SET firebase_uid = repeat('x',129) WHERE username = 'existing'");
+        execute("INSERT INTO users(username, name, email) VALUES ('without_uid', 'Without UID', 'without@example.invalid')");
+        assertThat(count("SELECT count(*) FROM users")).isEqualTo(2);
     }
 
     @Test

@@ -10,15 +10,23 @@ import jakarta.persistence.Version;
 import jakarta.validation.constraints.Email;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false)
     private UUID id;
+
+    @Column(name = "firebase_uid", length = 128, unique = true)
+    private String firebaseUid;
 
     @Email
     @Column(length = 254, nullable = false)
@@ -54,4 +62,8 @@ public class User {
     @Version
     @Column(nullable = false)
     private Long version;
+
+    public boolean isActive() {
+        return "ACTIVE".equals(status);
+    }
 }

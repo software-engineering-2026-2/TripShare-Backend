@@ -29,20 +29,20 @@ class FirebaseTokenServiceTest {
     @Test
     void validate_shouldReturnFirebaseToken_fromVerifyIdToken() throws FirebaseAuthException {
         FirebaseToken token = mock(FirebaseToken.class);
-        when(firebaseAuth.verifyIdToken("id-token")).thenReturn(token);
+        when(firebaseAuth.verifyIdToken("id-token", true)).thenReturn(token);
 
         assertThat(service.validate("id-token")).isSameAs(token);
-        verify(firebaseAuth).verifyIdToken("id-token");
+        verify(firebaseAuth).verifyIdToken("id-token", true);
         verifyNoMoreInteractions(firebaseAuth);
     }
 
     @Test
     void validate_shouldThrowFirebaseAuthException_whenTokenInvalid() throws FirebaseAuthException {
-        when(firebaseAuth.verifyIdToken("tampered"))
+        when(firebaseAuth.verifyIdToken("tampered", true))
                 .thenThrow(new FirebaseAuthException(ErrorCode.INVALID_ARGUMENT, "INVALID_ID_TOKEN", null, null, null));
 
         assertThatThrownBy(() -> service.validate("tampered"))
                 .isInstanceOf(FirebaseAuthException.class);
-        verify(firebaseAuth).verifyIdToken("tampered");
+        verify(firebaseAuth).verifyIdToken("tampered", true);
     }
 }

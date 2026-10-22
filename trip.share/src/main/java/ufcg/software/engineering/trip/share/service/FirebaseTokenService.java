@@ -6,7 +6,7 @@ import com.google.firebase.auth.FirebaseToken;
 import org.springframework.stereotype.Service;
 
 /**
- * Valida o ID token do Firebase emitido pelo cliente (header Authorization: Bearer).
+ * Valida a identidade Firebase somente durante o login, incluindo revogação e conta desativada.
  */
 @Service
 public class FirebaseTokenService {
@@ -18,6 +18,6 @@ public class FirebaseTokenService {
     }
 
     public FirebaseToken validate(String idToken) throws FirebaseAuthException {
-        return firebaseAuth.verifyIdToken(idToken);
+        return firebaseAuth.verifyIdToken(idToken, true);
     }
 }

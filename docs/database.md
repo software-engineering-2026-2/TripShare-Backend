@@ -4,13 +4,15 @@ Modelo PostgreSQL 16 baseado nas convenções e fichas RF-01 a RF-32 do
 [documento de requisitos](https://docs.google.com/document/d/1euLvqRRyR7TEQDtwJ5GcOq_YJUydZM2jZKGy_xOtSy8/edit?tab=t.0).
 As fichas detalhadas prevalecem sobre as tabelas de resumo divergentes.
 
-Esta entrega implementa a persistência e suas garantias estruturais. Não implementa entidades JPA,
-endpoints, autenticação, publicação, geração de roteiros ou fluxos administrativos.
+O modelo implementa a persistência e suas garantias estruturais. Usuários e sessões possuem entidades
+JPA e autenticação; publicação, geração de roteiros e fluxos administrativos permanecem futuros.
+Consulte os contratos e a configuração Firebase no [README](../README.md#login-e-logout).
 
 ## Executar
 
-Com Docker em execução, entre em `trip.share/`. Opcionalmente copie `.env.example` para `.env` e
-ajuste a configuração. Nunca versione credenciais reais.
+Com Docker em execução, entre em `trip.share/`. Opcionalmente copie `.env.example` para `.env` na raiz
+e ajuste a configuração. A aplicação exige credencial Firebase externa e Web API key; comandos que
+executam somente o banco não exigem Firebase. Nunca versione credenciais reais.
 
 ```bash
 # Banco disponível e atualizado, sem executar a aplicação
@@ -81,6 +83,7 @@ O Maven do migrador opera offline, com dependências previamente resolvidas dura
 | V4 | Integridade entre tabelas, índices, projeções públicas e ranking |
 | V5 | Categorias, ritmos e meios de transporte iniciais |
 | V6 | Verificação adiável da FK de dias para permitir a cascata completa de exclusão da viagem |
+| V7 | UID Firebase único por usuário, preservando UUIDs e cadastros existentes |
 
 O histórico fica em `flyway_schema_history`. Cada inicialização valida checksums e aplica apenas
 versões pendentes, sob o bloqueio de migração do Flyway. A referência de versão mais recente são
@@ -88,10 +91,10 @@ os scripts distribuídos com a aplicação/checkout, sem buscar SQL remoto em te
 
 `clean` e baseline automática estão desabilitados. Migrações fora de ordem, scripts com nome
 inválido, versões ausentes/mais recentes no banco e checksums diferentes devem interromper a execução.
-Hibernate usa `validate`: não cria nem modifica tabelas. Como ainda não existem entidades, essa
-validação será ampliada à medida que os mapeamentos forem implementados.
+Hibernate usa `validate`: não cria nem modifica tabelas. Valida usuários e sessões; essa
+validação será ampliada à medida que os outros mapeamentos forem implementados.
 
-Para evoluir, adicione `V7__description.sql`, depois V8 etc. Nunca edite V1–V6 depois de aplicadas.
+Para evoluir, adicione `V8__description.sql`, depois V9 etc. Nunca edite V1–V7 depois de aplicadas.
 Inclua a alteração Java correspondente e testes na mesma história de usuário quando houver entidades.
 Uma migration PostgreSQL transacional com erro é revertida; investigue antes de repetir. Não use
 `repair` para esconder divergências de scripts. Índices concorrentes futuros exigem migration própria
@@ -129,8 +132,12 @@ O seed não produz uploads fictícios nem solicita serviços externos.
 - `duration_days` é calculado como término menos início mais um. Não se armazena uma segunda duração editável.
 - Email e username têm índices únicos em `lower(...)`. Consultas de login normalizadas devem usar a mesma
   expressão para aproveitar o índice; telefone não é identificador único.
-- `password_hash` aceita hashes codificados; a aplicação deve usar um PasswordEncoder seguro. Nunca persistir
-  senha em claro, confirmação de senha, token original ou dados privados em logs.
+- Senhas pertencem ao Firebase Authentication; o esquema atual não possui `password_hash`.
+  `users.firebase_uid` é único, opcional para preservar cadastros antigos e necessário para login.
+  O cadastro salva o UID após validar a identidade; login busca exclusivamente pelo UID, sem associar e-mails.
+  Nunca persistir senha em claro, confirmação de senha, token original ou dados privados em logs.
+- Sessões duram 8 horas por padrão, sem renovação automática. Logout preenche `revoked_at` somente
+  na sessão atual; expiração, revogação e `users.status` são conferidos em cada requisição protegida.
 - Tokens de sessão e recuperação usam representação hexadecimal de SHA-256. Consumo de recuperação deve ser
   atômico, condicionado a `used_at IS NULL` e `expires_at > now()`, seguido da revogação das sessões na mesma transação.
 - Durações/valores desconhecidos são `NULL`, nunca zero inventado. Preço conhecido exige moeda e vice-versa.
@@ -298,7 +305,7 @@ erDiagram
 | RF | Suporte no banco | Responsabilidade futura da aplicação |
 |---|---|---|
 | 01 | users, unicidade de email/username | Validar cadastro e confirmação; gerar hash |
-| 02 | user_sessions, users.status | Autenticar, validar/revogar sessão |
+| 02 | user_sessions, users.status, users.firebase_uid | Login Firebase, validação e revogação da sessão atual implementados |
 | 03 | password_reset_tokens, validade e used_at | Enviar link, consumo atômico e revogar sessões |
 | 04 | users, public_profiles | Edição pelo proprietário e limites de apresentação |
 | 05 | trips, destinations, duração calculada | Resolver destino e listar só viagens próprias |
