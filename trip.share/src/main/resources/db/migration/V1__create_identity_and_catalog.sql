@@ -14,7 +14,6 @@ CREATE TABLE users (
     CONSTRAINT ck_users_username CHECK (btrim(username) <> ''),
     CONSTRAINT ck_users_name CHECK (btrim(name) <> ''),
     CONSTRAINT ck_users_email CHECK (btrim(email) <> '' AND email = btrim(email)),
-    CONSTRAINT ck_users_password_hash CHECK (length(password_hash) >= 60),
     CONSTRAINT ck_users_role CHECK (role IN ('USER', 'ADMIN')),
     CONSTRAINT ck_users_status CHECK (status IN ('ACTIVE', 'SUSPENDED'))
 );
