@@ -134,7 +134,7 @@ class DatabaseMigrationIT {
     void migrate_previousVersion_shouldPreserveExistingData() throws SQLException {
         var earlier = Flyway.configure().configuration(flyway().getConfiguration()).target("2").load();
         earlier.migrate();
-        execute("INSERT INTO users(username, name, email, password_hash) VALUES ('existing', 'Existing User', 'existing@example.invalid', repeat('x', 60))");
+        execute("INSERT INTO users(username, name, email) VALUES ('existing', 'Existing User', 'existing@example.invalid')");
         assertThat(flyway().migrate().migrationsExecuted).isEqualTo(4);
         assertThat(value("SELECT name FROM users WHERE username = 'existing'")).isEqualTo("Existing User");
     }
@@ -217,8 +217,8 @@ class DatabaseMigrationIT {
     @Test
     void constraints_invalidIdentityAndIntervals_shouldRejectData() throws SQLException {
         seed();
-        rejected("INSERT INTO users(username, name, email, password_hash) VALUES ('DEMO_ALEX', 'Duplicate', 'other@example.invalid', repeat('x',60))");
-        rejected("INSERT INTO users(username, name, email, password_hash) VALUES ('another', 'Duplicate', 'ALEX@EXAMPLE.INVALID', repeat('x',60))");
+        rejected("INSERT INTO users(username, name, email) VALUES ('DEMO_ALEX', 'Duplicate', 'other@example.invalid')");
+        rejected("INSERT INTO users(username, name, email) VALUES ('another', 'Duplicate', 'ALEX@EXAMPLE.INVALID')");
         rejected("INSERT INTO user_sessions(user_id, token_hash, expires_at) VALUES ('" + USER + "', 'plain-token', now() + interval '1 hour')");
         rejected("INSERT INTO password_reset_tokens(user_id, token_hash, expires_at) VALUES ('" + USER + "', repeat('a',64), now() + interval '31 minutes')");
         rejected("INSERT INTO trip_days(trip_id, day_number, available_from, available_until) VALUES ('" + TRIP + "', 4, '12:00','10:00')");
@@ -359,7 +359,7 @@ class DatabaseMigrationIT {
         execute("UPDATE users SET status = 'SUSPENDED' WHERE id = '" + USER + "'");
         assertThat(count("SELECT count(*) FROM public_itineraries")).isZero();
         assertThat(count("SELECT count(*) FROM public_profiles")).isEqualTo(2);
-        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name LIKE 'public_%' AND column_name IN ('email','phone','password_hash','token_hash','starts_on','ends_on','trip_id')"))
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name LIKE 'public_%' AND column_name IN ('email','phone','token_hash','starts_on','ends_on','trip_id')"))
             .isZero();
     }
 

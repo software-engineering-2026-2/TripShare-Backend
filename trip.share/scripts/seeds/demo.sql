@@ -2,13 +2,13 @@
 BEGIN;
 SELECT pg_advisory_xact_lock(782349102);
 
-INSERT INTO users (id, username, name, email, password_hash, role) VALUES
+INSERT INTO users (id, username, name, email, role) VALUES
     ('10000000-0000-0000-0000-000000000001', 'demo_alex', 'Demo Alex', 'alex@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'USER'),
+     'USER'),
     ('10000000-0000-0000-0000-000000000002', 'demo_sam', 'Demo Sam', 'sam@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'USER'),
+     'USER'),
     ('10000000-0000-0000-0000-000000000003', 'demo_admin', 'Demo Administrator', 'admin@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'ADMIN')
+     'ADMIN')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO destinations (id, name, region, country_code, timezone, source, external_id) VALUES
