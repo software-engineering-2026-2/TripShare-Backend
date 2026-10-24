@@ -2,13 +2,20 @@
 BEGIN;
 SELECT pg_advisory_xact_lock(782349102);
 
-INSERT INTO users (id, username, name, email, password_hash, role) VALUES
-    ('10000000-0000-0000-0000-000000000001', 'demo_alex', 'Demo Alex', 'alex@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'USER'),
-    ('10000000-0000-0000-0000-000000000002', 'demo_sam', 'Demo Sam', 'sam@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'USER'),
-    ('10000000-0000-0000-0000-000000000003', 'demo_admin', 'Demo Administrator', 'admin@example.invalid',
-     '{bcrypt}$2y$12$y1eH311Cb5QxqY1euFjftOqsHLOvRy/gw6l8eB3AfsPUaimWf6xdW', 'ADMIN')
+-- These UIDs are fixtures, not Firebase accounts and do not enable real login.
+INSERT INTO auth (id, uuid) VALUES
+    ('01000000-0000-0000-0000-000000000001', 'demo-only-alex'),
+    ('01000000-0000-0000-0000-000000000002', 'demo-only-sam'),
+    ('01000000-0000-0000-0000-000000000003', 'demo-only-admin')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO users (id, auth_id, username, name, email, role) VALUES
+    ('10000000-0000-0000-0000-000000000001', '01000000-0000-0000-0000-000000000001',
+     'demo_alex', 'Demo Alex', 'alex@example.invalid', 'USER'),
+    ('10000000-0000-0000-0000-000000000002', '01000000-0000-0000-0000-000000000002',
+     'demo_sam', 'Demo Sam', 'sam@example.invalid', 'USER'),
+    ('10000000-0000-0000-0000-000000000003', '01000000-0000-0000-0000-000000000003',
+     'demo_admin', 'Demo Administrator', 'admin@example.invalid', 'ADMIN')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO destinations (id, name, region, country_code, timezone, source, external_id) VALUES

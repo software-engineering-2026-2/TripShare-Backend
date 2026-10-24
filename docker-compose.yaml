@@ -3,7 +3,7 @@ services:
   spring:
     profiles: ["app"]
     build:
-      context: ./trip.share
+      context: .
       target: runtime
     container_name: ${SPRING_CONTAINER_NAME:-spring-app}
     ports:
@@ -12,6 +12,14 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      FIREBASE_KEY_PATH: file:/run/secrets/firebase.json
+    volumes:
+      - type: bind
+        source: ${FIREBASE_CREDENTIALS_FILE:-./.secrets/firebase.json}
+        target: /run/secrets/firebase.json
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,7 +29,7 @@ services:
   migrate:
     profiles: ["tools", "app"]
     build:
-      context: ./trip.share
+      context: .
       target: migrate
     environment:
       FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
@@ -29,7 +37,7 @@ services:
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       FLYWAY_IGNORE_MIGRATION_PATTERNS: ""
     volumes:
-      - ./src/main/resources/db/migration:/app/src/main/resources/db/migration:ro
+      - ./trip.share/src/main/resources/db/migration:/app/src/main/resources/db/migration:ro
     depends_on:
       postgres:
         condition: service_healthy

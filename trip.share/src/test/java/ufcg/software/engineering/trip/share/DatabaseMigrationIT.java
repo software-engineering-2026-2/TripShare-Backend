@@ -119,24 +119,35 @@ class DatabaseMigrationIT {
 
     @Test
     void migrate_emptyDatabase_shouldCreateSchemaAndOnlyReferenceData() throws SQLException {
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(6);
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(7);
         assertThat(count("SELECT count(*) FROM categories")).isEqualTo(7);
         assertThat(count("SELECT count(*) FROM travel_paces")).isEqualTo(3);
         assertThat(count("SELECT count(*) FROM transport_modes")).isEqualTo(4);
         assertThat(count("SELECT count(*) FROM users")).isZero();
         assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"))
-            .isEqualTo(28); // 27 domain tables plus Flyway history.
+            .isEqualTo(27); // 26 domain tables plus Flyway history.
         assertThat(flyway().migrate().migrationsExecuted).isZero();
-        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(6);
+        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
     }
 
     @Test
-    void migrate_previousVersion_shouldPreserveExistingData() throws SQLException {
-        var earlier = Flyway.configure().configuration(flyway().getConfiguration()).target("2").load();
+    void migrate_previousVersion_shouldResetLegacyUsersAndPreserveCatalogs() throws SQLException {
+        var earlier = Flyway.configure().configuration(flyway().getConfiguration()).target("6").load();
         earlier.migrate();
-        execute("INSERT INTO users(username, name, email, password_hash) VALUES ('existing', 'Existing User', 'existing@example.invalid', repeat('x', 60))");
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(4);
-        assertThat(value("SELECT name FROM users WHERE username = 'existing'")).isEqualTo("Existing User");
+        execute("INSERT INTO users(id, username, name, email, password_hash) VALUES ('" + USER + "','existing', 'Existing User', 'existing@example.invalid', repeat('x', 60))");
+        execute("INSERT INTO destinations(id,name,country_code,timezone,source) VALUES ('" + DESTINATION + "','Existing City','BR','America/Fortaleza','DEMO')");
+        execute("INSERT INTO trips(id,user_id,destination_id,title,starts_on,ends_on) VALUES ('" + TRIP + "','" + USER + "','" + DESTINATION + "','Legacy trip',CURRENT_DATE,CURRENT_DATE)");
+        execute("INSERT INTO itineraries(trip_id,title) VALUES ('" + TRIP + "','Legacy itinerary')");
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM users")).isZero();
+        assertThat(count("SELECT count(*) FROM trips")).isZero();
+        assertThat(count("SELECT count(*) FROM itineraries")).isZero();
+        assertThat(count("SELECT count(*) FROM auth")).isZero();
+        assertThat(count("SELECT count(*) FROM destinations")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM categories")).isEqualTo(7);
+        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
+        assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('user_sessions','password_reset_tokens')")).isZero();
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'password_hash'")).isZero();
     }
 
     @Test
@@ -145,8 +156,8 @@ class DatabaseMigrationIT {
         try {
             List<Callable<Integer>> tasks = List.of(() -> flyway().migrate().migrationsExecuted, () -> flyway().migrate().migrationsExecuted);
             var results = executor.invokeAll(tasks);
-            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(6);
-            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(6);
+            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(7);
+            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
         } finally {
             executor.shutdownNow();
         }
@@ -217,10 +228,17 @@ class DatabaseMigrationIT {
     @Test
     void constraints_invalidIdentityAndIntervals_shouldRejectData() throws SQLException {
         seed();
-        rejected("INSERT INTO users(username, name, email, password_hash) VALUES ('DEMO_ALEX', 'Duplicate', 'other@example.invalid', repeat('x',60))");
-        rejected("INSERT INTO users(username, name, email, password_hash) VALUES ('another', 'Duplicate', 'ALEX@EXAMPLE.INVALID', repeat('x',60))");
-        rejected("INSERT INTO user_sessions(user_id, token_hash, expires_at) VALUES ('" + USER + "', 'plain-token', now() + interval '1 hour')");
-        rejected("INSERT INTO password_reset_tokens(user_id, token_hash, expires_at) VALUES ('" + USER + "', repeat('a',64), now() + interval '31 minutes')");
+        execute("INSERT INTO auth(id,uuid) VALUES ('01000000-0000-0000-0000-000000000004','new-firebase-uid')");
+        rejected("INSERT INTO users(auth_id,username,name,email) VALUES ('01000000-0000-0000-0000-000000000004','DEMO_ALEX','Duplicate','other@example.invalid')");
+        rejected("INSERT INTO users(auth_id,username,name,email) VALUES ('01000000-0000-0000-0000-000000000004','another','Duplicate','ALEX@EXAMPLE.INVALID')");
+        rejected("INSERT INTO users(username,name,email) VALUES ('missing','Missing auth','missing@example.invalid')");
+        rejected("INSERT INTO users(auth_id,username,name,email) VALUES (gen_random_uuid(),'missing','Missing auth','missing@example.invalid')");
+        rejected("INSERT INTO users(auth_id,username,name,email) VALUES ('01000000-0000-0000-0000-000000000001','shared','Shared auth','shared@example.invalid')");
+        rejected("INSERT INTO auth(uuid) VALUES ('demo-only-alex')");
+        rejected("INSERT INTO auth(uuid) VALUES ('   ')");
+        rejected("INSERT INTO auth(uuid) VALUES (NULL)");
+        rejected("INSERT INTO auth(uuid) VALUES (repeat('a',129))");
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'auth'")).isEqualTo(2);
         rejected("INSERT INTO trip_days(trip_id, day_number, available_from, available_until) VALUES ('" + TRIP + "', 4, '12:00','10:00')");
         rejected("UPDATE trips SET ends_on = starts_on - 1 WHERE id = '" + TRIP + "'");
         rejected("UPDATE places SET latitude = 91, longitude = 0 WHERE id = '30000000-0000-0000-0000-000000000001'");
@@ -359,7 +377,7 @@ class DatabaseMigrationIT {
         execute("UPDATE users SET status = 'SUSPENDED' WHERE id = '" + USER + "'");
         assertThat(count("SELECT count(*) FROM public_itineraries")).isZero();
         assertThat(count("SELECT count(*) FROM public_profiles")).isEqualTo(2);
-        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name LIKE 'public_%' AND column_name IN ('email','phone','password_hash','token_hash','starts_on','ends_on','trip_id')"))
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name LIKE 'public_%' AND column_name IN ('auth_id','uuid','email','phone','password_hash','token_hash','starts_on','ends_on','trip_id')"))
             .isZero();
     }
 

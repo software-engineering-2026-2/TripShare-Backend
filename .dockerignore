@@ -1,0 +1,12 @@
+**/target/
+.git/
+.agents/
+.idea/
+.vscode/
+.old/
+.secrets/
+**/.env
+**/.env.*
+**/firebase*.json
+**/*firebase*key*.json
+**/*service*account*.json

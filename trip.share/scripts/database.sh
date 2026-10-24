@@ -8,7 +8,6 @@ cd "$project_dir"
 
 compose=(
     docker compose
-    --project-name tripshare
     --project-directory "$repo_dir"
     -f "$repo_dir/docker-compose.yaml"
 )
