@@ -6,9 +6,6 @@ import jakarta.validation.constraints.Pattern;
 
 public record RegisterRequest(
 
-        @NotBlank(message="Email is required")
-        String email,
-
         @NotBlank(message="Username is required")
         String username,
 
@@ -18,17 +15,8 @@ public record RegisterRequest(
         )
         String phone,
 
-        @NotBlank(message="Password is required")
-        String password,
+        String bio,
 
-        @NotBlank(message="Password confirmation is required")
-        String confirmPassword
-) {
-        @AssertTrue(message="Password and confirmation must match")
-        public boolean isPasswordMatching() {
-                return password != null && password.equals(confirmPassword);
-        }
-
-
-}
+        String hometown
+) {}
 
