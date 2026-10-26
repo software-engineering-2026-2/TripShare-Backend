@@ -20,6 +20,9 @@ public class User {
     @Column(name = "id", nullable = false)
     private UUID id;
 
+    @Column(name = "firebase_uid", nullable = false, unique = true, length = 128)
+    private String firebaseUid;
+
     @Email
     @Column(length = 254, nullable = false)
     private String email;
