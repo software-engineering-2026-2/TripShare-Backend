@@ -156,7 +156,8 @@ exige igualdade exata entre o UID verificado e `uuid` no corpo. Não há senha n
 }
 ```
 
-`uuid`, `username` (até 50 caracteres) e `name` (até 120) são obrigatórios. Telefone é opcional e,
+`uuid` (até 128 caracteres), `username` (até 50 caracteres) e `name` (até 120) são obrigatórios.
+Telefone é opcional e,
 quando enviado, deve seguir E.164. `bio` e `hometown` são opcionais. O email vem do token e deve ser
 válido, com até 254 caracteres. Papéis e status enviados pelo cliente não alteram os padrões `USER` e `ACTIVE`.
 
