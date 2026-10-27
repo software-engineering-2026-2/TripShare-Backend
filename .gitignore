@@ -205,6 +205,8 @@ README.html
 .env.*
 !.env.example
 .old/
+
+/trip.share/src/main/resources/firebase/tripshare-firebase-key.json
 .secrets/
 **/firebase*.json
 **/*firebase*key*.json
