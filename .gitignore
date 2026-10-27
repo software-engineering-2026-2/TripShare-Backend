@@ -205,5 +205,12 @@ README.html
 .env.*
 !.env.example
 .old/
+<<<<<<< HEAD
 
 /trip.share/src/main/resources/firebase/tripshare-firebase-key.json
+=======
+.secrets/
+**/firebase*.json
+**/*firebase*key*.json
+**/*service*account*.json
+>>>>>>> dc4f0e362f2ca469a28fa63ba4ab46397cb3687b

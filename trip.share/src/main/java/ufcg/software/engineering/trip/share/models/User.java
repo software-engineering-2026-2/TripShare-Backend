@@ -1,37 +1,37 @@
 package ufcg.software.engineering.trip.share.models;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import jakarta.validation.constraints.Email;
-import java.time.OffsetDateTime;
+import jakarta.persistence.*;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "users")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "firebase_uid", nullable = false, unique = true, length = 128)
-    private String firebaseUid;
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "auth_id", nullable = false, unique = true,
+            foreignKey = @ForeignKey(name = "fk_users_auth"))
+    private Auth auth;
 
-    @Email
-    @Column(length = 254, nullable = false)
-    private String email;
-
-    @Column(length = 50, nullable = false)
+    @Column(nullable = false, length = 50)
     private String username;
 
-    @Column(length = 120, nullable = false)
+    @Column(nullable = false, length = 120)
     private String name;
+
+    @Column(nullable = false, length = 254)
+    private String email;
 
     @Column(length = 32)
     private String phone;
@@ -42,19 +42,36 @@ public class User {
     @Column(columnDefinition = "text")
     private String hometown;
 
-    @Column(nullable = false)
-    private String role = "USER";
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "text")
+    private UserRole role = UserRole.USER;
 
-    @Column(nullable = false)
-    private String status = "ACTIVE";
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "text")
+    private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 
     @Version
     @Column(nullable = false)
     private Long version;
+
+    public static User create(Auth auth, String username, String name, String email,
+                              String phone, String bio, String hometown) {
+        User user = new User();
+        user.auth = Objects.requireNonNull(auth);
+        user.username = Objects.requireNonNull(username);
+        user.name = Objects.requireNonNull(name);
+        user.email = Objects.requireNonNull(email);
+        user.phone = phone;
+        user.bio = bio;
+        user.hometown = hometown;
+        return user;
+    }
 }

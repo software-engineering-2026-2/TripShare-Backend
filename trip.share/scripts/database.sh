@@ -2,8 +2,15 @@
 set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_dir="$(cd -- "$project_dir/.." && pwd)"
+
 cd "$project_dir"
-compose=(docker compose --project-directory "$project_dir" -f "$project_dir/docker-compose.yaml")
+
+compose=(
+    docker compose
+    --project-directory "$repo_dir"
+    -f "$repo_dir/docker-compose.yaml"
+)
 
 usage() {
     echo "Usage: $0 {start|restart|migrate|status} [--demo]" >&2

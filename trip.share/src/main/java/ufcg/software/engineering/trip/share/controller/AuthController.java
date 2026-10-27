@@ -1,22 +1,32 @@
 package ufcg.software.engineering.trip.share.controller;
 
-
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import ufcg.software.engineering.trip.share.dto.RegisterRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import ufcg.software.engineering.trip.share.dto.*;
+import ufcg.software.engineering.trip.share.service.AuthService;
+import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+    private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<Void> register(
-            @Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok().build();
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
+    @PostMapping("/login")
+    public UserResponse login(@Valid @RequestBody LoginRequest request,
+                              @AuthenticationPrincipal FirebaseIdentity identity) {
+        return authService.login(request, identity);
+    }
+
+    @PostMapping("/register")
+    @ResponseStatus(HttpStatus.CREATED)
+    public UserResponse register(@Valid @RequestBody RegisterRequest request,
+                                 @AuthenticationPrincipal FirebaseIdentity identity) {
+        return authService.register(request, identity);
+    }
 }

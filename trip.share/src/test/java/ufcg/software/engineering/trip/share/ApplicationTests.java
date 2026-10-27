@@ -6,16 +6,21 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 import javax.sql.DataSource;
+import com.google.firebase.auth.FirebaseAuth;
 
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 @ActiveProfiles("test")
 class ApplicationTests {
+
+	@MockitoBean
+	private FirebaseAuth firebaseAuth;
 
 	@Autowired
 	private DataSource dataSource;

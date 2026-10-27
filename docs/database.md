@@ -4,8 +4,10 @@ Modelo PostgreSQL 16 baseado nas convenções e fichas RF-01 a RF-32 do
 [documento de requisitos](https://docs.google.com/document/d/1euLvqRRyR7TEQDtwJ5GcOq_YJUydZM2jZKGy_xOtSy8/edit?tab=t.0).
 As fichas detalhadas prevalecem sobre as tabelas de resumo divergentes.
 
-Esta entrega implementa a persistência e suas garantias estruturais. Não implementa entidades JPA,
-endpoints, autenticação, publicação, geração de roteiros ou fluxos administrativos.
+Esta entrega implementa a persistência e suas garantias estruturais, as entidades JPA `Auth` e `User`,
+cadastro de perfil e login autenticados por ID token Firebase. Publicação, geração de roteiros e
+fluxos administrativos continuam fora dessa implementação. O fluxo Firebase substitui as regras
+anteriores de senha e sessão local dos RF-01–RF-03.
 
 ## Executar
 
@@ -81,6 +83,7 @@ O Maven do migrador opera offline, com dependências previamente resolvidas dura
 | V4 | Integridade entre tabelas, índices, projeções públicas e ranking |
 | V5 | Categorias, ritmos e meios de transporte iniciais |
 | V6 | Verificação adiável da FK de dias para permitir a cascata completa de exclusão da viagem |
+| V7 | Reset autorizado de usuários legados; auth Firebase, users.auth_id obrigatório e remoção da autenticação local |
 
 O histórico fica em `flyway_schema_history`. Cada inicialização valida checksums e aplica apenas
 versões pendentes, sob o bloqueio de migração do Flyway. A referência de versão mais recente são
@@ -88,10 +91,9 @@ os scripts distribuídos com a aplicação/checkout, sem buscar SQL remoto em te
 
 `clean` e baseline automática estão desabilitados. Migrações fora de ordem, scripts com nome
 inválido, versões ausentes/mais recentes no banco e checksums diferentes devem interromper a execução.
-Hibernate usa `validate`: não cria nem modifica tabelas. Como ainda não existem entidades, essa
-validação será ampliada à medida que os mapeamentos forem implementados.
+Hibernate usa `validate`: não cria nem modifica tabelas e verifica os mapeamentos de `Auth` e `User`.
 
-Para evoluir, adicione `V7__description.sql`, depois V8 etc. Nunca edite V1–V6 depois de aplicadas.
+Para evoluir, adicione `V8__description.sql`, depois V9 etc. Nunca edite migrations já aplicadas.
 Inclua a alteração Java correspondente e testes na mesma história de usuário quando houver entidades.
 Uma migration PostgreSQL transacional com erro é revertida; investigue antes de repetir. Não use
 `repair` para esconder divergências de scripts. Índices concorrentes futuros exigem migration própria
@@ -99,6 +101,20 @@ e tratamento específico de transação e bloqueio, não um `CONCURRENTLY` adici
 
 Se um banco já contiver tabelas sem histórico Flyway, o processo para com erro. Faça um dump,
 compare o esquema e planeje uma baseline explícita ou transformação própria; não apague o volume.
+
+### Transição Firebase (V7)
+
+A V7 é destrutiva por decisão explícita para o ambiente de desenvolvimento. `TRUNCATE users CASCADE`
+remove usuários antigos e todas as tabelas dependentes, pois não há mapeamento confiável para UIDs
+Firebase. Os catálogos e o histórico Flyway permanecem. Faça um `pg_dump` para `.old/` antes da
+primeira aplicação; o README contém o comando. A transação da migration reverte a limpeza se falhar.
+
+`auth` possui somente `id uuid` e `uuid varchar(128)`, ambos obrigatórios. `uuid` é o UID opaco e
+único do Firebase, não um UUID PostgreSQL. `users.auth_id` é uma FK obrigatória e única: cada perfil
+possui uma identidade exclusiva. A busca de login usa esse vínculo, após validar o ID token e
+comparar o UID recebido com a identidade verificada. Cadastro cria as duas linhas atomicamente.
+Não há senha, sessão ou recuperação de senha local. Consulte os contratos `/auth/register` e
+`/auth/login` no README.
 Antes de alterações em dados reais, valide restauração do backup e compatibilidade da aplicação.
 `down --volumes` apaga dados e não faz parte do fluxo de atualização.
 
@@ -114,8 +130,8 @@ nem sobrescrevem edições. Se um identificador natural estiver ocupado por um r
 o seed falha e reverte, em vez de associar registros a uma conta real.
 
 São criadas as contas `demo_alex`, `demo_sam` e `demo_admin`, com emails no domínio reservado
-`example.invalid`; a última tem papel ADMIN. O hash bcrypt corresponde à senha de demonstração
-`TripShareDemo2026!`. Isso não implementa login. Nunca use essas contas em produção.
+`example.invalid`; a última tem papel ADMIN. As identidades `demo-only-alex`, `demo-only-sam` e
+`demo-only-admin` são UIDs fictícios e não habilitam login Firebase. Nunca use essas contas em produção.
 Locais de demonstração têm origem `DEMO` e não representam atrações reais, preços ou coordenadas verificados.
 O seed não produz uploads fictícios nem solicita serviços externos.
 
@@ -127,12 +143,10 @@ O seed não produz uploads fictícios nem solicita serviços externos.
 - Datas pessoais ficam em `trips`. `trip_days.day_number` começa em 1. Horários são locais ao fuso do destino;
   o identificador de fuso IANA deverá ser validado pela aplicação.
 - `duration_days` é calculado como término menos início mais um. Não se armazena uma segunda duração editável.
-- Email e username têm índices únicos em `lower(...)`. Consultas de login normalizadas devem usar a mesma
-  expressão para aproveitar o índice; telefone não é identificador único.
-- `password_hash` aceita hashes codificados; a aplicação deve usar um PasswordEncoder seguro. Nunca persistir
-  senha em claro, confirmação de senha, token original ou dados privados em logs.
-- Tokens de sessão e recuperação usam representação hexadecimal de SHA-256. Consumo de recuperação deve ser
-  atômico, condicionado a `used_at IS NULL` e `expires_at > now()`, seguido da revogação das sessões na mesma transação.
+- Email e username têm índices únicos em `lower(...)`; telefone não é identificador único. Login usa
+  o UID validado, consultando `auth.uuid` e `users.auth_id`, ambos com índices únicos.
+- Firebase é responsável pelas credenciais e tokens. Não persistir senhas, tokens originais ou
+  chaves de serviço no banco e não expor esses dados em logs ou projeções públicas.
 - Durações/valores desconhecidos são `NULL`, nunca zero inventado. Preço conhecido exige moeda e vice-versa.
   Coordenadas são um par completo com limites geográficos. Horários de locais usam dias ISO 1–7 e suportam
   múltiplos períodos e fechamento no dia seguinte; ausência de linhas significa informação desconhecida.
@@ -154,8 +168,9 @@ O seed não produz uploads fictícios nem solicita serviços externos.
   motivo OTHER exige descrição. O registro não aplica automaticamente uma penalidade.
 - Moderação registra administrador, justificativa e snapshot histórico. Exclusão do conteúdo pode remover
   a denúncia, mas preserva a decisão, cujo `report_id` vira NULL. A decisão anterior pode ser referenciada por uma revisão.
-- Suspensão é vigente até revisão administrativa. Revogar sessões e aplicar/restaurar medidas são operações
-  transacionais futuras da aplicação; nenhum email, API externa ou fluxo de negócio é disparado por trigger.
+- Suspensão é vigente até revisão administrativa e bloqueia o login mesmo com token válido.
+  Aplicar/restaurar medidas e revogar tokens no Firebase são operações futuras da aplicação;
+  nenhum email, API externa ou fluxo de negócio é disparado por trigger.
 
 ## Exclusão e privacidade
 
@@ -245,8 +260,7 @@ testes de inicialização e não tenta iniciar containers dentro do estágio de 
 
 ```mermaid
 erDiagram
-    users ||--o{ user_sessions : owns
-    users ||--o{ password_reset_tokens : requests
+    auth ||--o| users : identifies
     users ||--o{ trips : owns
     destinations ||--o{ trips : receives
     destinations ||--o{ places : contains
@@ -295,11 +309,11 @@ erDiagram
 
 ## Rastreabilidade de requisitos
 
-| RF | Suporte no banco | Responsabilidade futura da aplicação |
+| RF | Suporte no banco | Responsabilidade da aplicação / Firebase |
 |---|---|---|
-| 01 | users, unicidade de email/username | Validar cadastro e confirmação; gerar hash |
-| 02 | user_sessions, users.status | Autenticar, validar/revogar sessão |
-| 03 | password_reset_tokens, validade e used_at | Enviar link, consumo atômico e revogar sessões |
+| 01 | auth, users, unicidade de UID/email/username | Firebase cria a conta; backend cadastra o perfil autenticado |
+| 02 | users.auth_id, auth.uuid, users.status | Validar ID token, conferir UID e retornar perfil ativo |
+| 03 | Sem tokens de recuperação locais | Recuperação de senha pelo Firebase no frontend |
 | 04 | users, public_profiles | Edição pelo proprietário e limites de apresentação |
 | 05 | trips, destinations, duração calculada | Resolver destino e listar só viagens próprias |
 | 06 | Período e cascatas de trips | Confirmar efeitos e realocar antes de encurtar |
@@ -328,6 +342,6 @@ erDiagram
 | 29 | Origem COPIED, referência e atribuição | Copiar conteúdo em transação sem interações |
 | 30 | notifications, event_key e read_at | Criar evento na transação, sem duplicar |
 | 31 | content_reports, motivo e pendência única | Validar acesso e aceitar denúncia |
-| 32 | moderation_actions, flags e users.status | Verificar ADMIN, aplicar medida e revogar sessões |
+| 32 | moderation_actions, flags e users.status | Verificar ADMIN, aplicar medida e coordenar revogação Firebase |
 
 O dicionário completo de colunas, tipos, valores padrão e constraints está em [database-dictionary.md](database-dictionary.md).

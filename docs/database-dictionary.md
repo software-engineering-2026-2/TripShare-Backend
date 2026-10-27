@@ -1,10 +1,27 @@
 # Dicionário de dados — TripShare
 
-PostgreSQL 16, migrations V1–V6. Gerado a partir do catálogo real; SQL versionado é a fonte de verdade.
+PostgreSQL 16, migrations V1–V7. Gerado a partir do catálogo real; SQL versionado é a fonte de verdade.
 
 Ver [modelagem, regras, diagrama e requisitos](database.md). `NULL` representa informação opcional ou desconhecida.
 
 Índices de PK/UNIQUE não são repetidos na lista de índices adicionais.
+
+## auth
+
+Identidade Firebase. `uuid` contém um UID textual opaco, não um UUID PostgreSQL.
+
+| Coluna | Tipo | Aceita NULL | Padrão / expressão gerada |
+|---|---|---|---|
+| `id` | `uuid` | Não | `gen_random_uuid()` |
+| `uuid` | `character varying(128)` | Não | `—` |
+
+Constraints:
+
+```sql
+pk_auth: PRIMARY KEY (id);
+uq_auth_uuid: UNIQUE (uuid);
+ck_auth_uuid: CHECK ((btrim((uuid)::text) <> ''::text));
+```
 
 ## categories
 
@@ -438,34 +455,6 @@ CREATE INDEX idx_notifications_itinerary ON public.notifications USING btree (it
 CREATE INDEX idx_notifications_recipient ON public.notifications USING btree (recipient_id, created_at DESC, id);
 ```
 
-## password_reset_tokens
-
-| Coluna | Tipo | Aceita NULL | Padrão / expressão gerada |
-|---|---|---|---|
-| `id` | `uuid` | Não | `gen_random_uuid()` |
-| `user_id` | `uuid` | Não | `—` |
-| `token_hash` | `character varying(64)` | Não | `—` |
-| `created_at` | `timestamp with time zone` | Não | `CURRENT_TIMESTAMP` |
-| `expires_at` | `timestamp with time zone` | Não | `(CURRENT_TIMESTAMP + '00:30:00'::interval)` |
-| `used_at` | `timestamp with time zone` | Sim | `—` |
-
-Constraints:
-
-```sql
-ck_password_reset_tokens_expiry: CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:30:00'::interval))));
-ck_password_reset_tokens_hash: CHECK (((token_hash)::text ~ '^[0-9a-f]{64}$'::text));
-ck_password_reset_tokens_used: CHECK (((used_at IS NULL) OR (used_at >= created_at)));
-fk_password_reset_tokens_user: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-pk_password_reset_tokens: PRIMARY KEY (id);
-uq_password_reset_tokens_hash: UNIQUE (token_hash);
-```
-
-Índices adicionais:
-
-```sql
-CREATE INDEX idx_password_reset_tokens_user ON public.password_reset_tokens USING btree (user_id, expires_at);
-```
-
 ## place_categories
 
 | Coluna | Tipo | Aceita NULL | Padrão / expressão gerada |
@@ -702,44 +691,16 @@ pk_user_follows: PRIMARY KEY (follower_id, followed_id);
 CREATE INDEX idx_user_follows_followed ON public.user_follows USING btree (followed_id, follower_id);
 ```
 
-## user_sessions
-
-| Coluna | Tipo | Aceita NULL | Padrão / expressão gerada |
-|---|---|---|---|
-| `id` | `uuid` | Não | `gen_random_uuid()` |
-| `user_id` | `uuid` | Não | `—` |
-| `token_hash` | `character varying(64)` | Não | `—` |
-| `created_at` | `timestamp with time zone` | Não | `CURRENT_TIMESTAMP` |
-| `expires_at` | `timestamp with time zone` | Não | `—` |
-| `revoked_at` | `timestamp with time zone` | Sim | `—` |
-
-Constraints:
-
-```sql
-ck_user_sessions_expiry: CHECK ((expires_at > created_at));
-ck_user_sessions_revoked: CHECK (((revoked_at IS NULL) OR (revoked_at >= created_at)));
-ck_user_sessions_token_hash: CHECK (((token_hash)::text ~ '^[0-9a-f]{64}$'::text));
-fk_user_sessions_user: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-pk_user_sessions: PRIMARY KEY (id);
-uq_user_sessions_token_hash: UNIQUE (token_hash);
-```
-
-Índices adicionais:
-
-```sql
-CREATE INDEX idx_user_sessions_user ON public.user_sessions USING btree (user_id, expires_at);
-```
-
 ## users
 
 | Coluna | Tipo | Aceita NULL | Padrão / expressão gerada |
 |---|---|---|---|
 | `id` | `uuid` | Não | `gen_random_uuid()` |
+| `auth_id` | `uuid` | Não | `—` |
 | `username` | `character varying(50)` | Não | `—` |
 | `name` | `character varying(120)` | Não | `—` |
 | `email` | `character varying(254)` | Não | `—` |
 | `phone` | `character varying(32)` | Sim | `—` |
-| `password_hash` | `text` | Não | `—` |
 | `bio` | `text` | Sim | `—` |
 | `hometown` | `text` | Sim | `—` |
 | `role` | `text` | Não | `'USER'::text` |
@@ -753,11 +714,12 @@ Constraints:
 ```sql
 ck_users_email: CHECK (((btrim((email)::text) <> ''::text) AND ((email)::text = btrim((email)::text))));
 ck_users_name: CHECK ((btrim((name)::text) <> ''::text));
-ck_users_password_hash: CHECK ((length(password_hash) >= 60));
 ck_users_role: CHECK ((role = ANY (ARRAY['USER'::text, 'ADMIN'::text])));
 ck_users_status: CHECK ((status = ANY (ARRAY['ACTIVE'::text, 'SUSPENDED'::text])));
 ck_users_username: CHECK ((btrim((username)::text) <> ''::text));
 pk_users: PRIMARY KEY (id);
+fk_users_auth: FOREIGN KEY (auth_id) REFERENCES auth(id);
+uq_users_auth: UNIQUE (auth_id);
 ```
 
 Índices adicionais:

@@ -1,17 +1,12 @@
 package ufcg.software.engineering.trip.share.auth;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.google.firebase.ErrorCode;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.FirebaseToken;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,11 +16,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 /**
  * Integração da autenticação Firebase: SecurityFilterChain (SecurityConfig) + filtro
@@ -51,13 +49,12 @@ class FirebaseAuthIntegrationTest {
     private FirebaseAuth firebaseAuth;
 
     @MockitoBean
-    private ufcg.software.engineering.trip.share.service.FirebaseTokenService firebaseTokenService;
+    private FirebaseTokenService firebaseTokenService;
 
     @Test
     void shouldAllowAccessWithUidPrincipal_whenBearerTokenIsValid() throws Exception {
-        FirebaseToken token = mock(FirebaseToken.class);
-        when(token.getUid()).thenReturn("test-firebase-uid");
-        when(firebaseTokenService.validate(VALID_TOKEN)).thenReturn(token);
+        when(firebaseTokenService.validate(VALID_TOKEN))
+                .thenReturn(new FirebaseIdentity("test-firebase-uid", "test@example.invalid"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "Bearer " + VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -79,19 +76,18 @@ class FirebaseAuthIntegrationTest {
     @Test
     void shouldReturn401_whenFirebaseTokenIsInvalid() throws Exception {
         when(firebaseTokenService.validate("invalid-id-token"))
-                .thenThrow(new FirebaseAuthException(ErrorCode.UNAUTHENTICATED, "INVALID_ID_TOKEN", null, null, null));
+                .thenThrow(new BadCredentialsException("Invalid Firebase token"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "Bearer invalid-id-token"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(result -> assertThat(result.getResponse().getContentAsString()).isEmpty());
+                .andExpect(content().json("{\"status\":401,\"message\":\"Invalid Firebase token\"}"));
     }
 
     @Test
     void shouldAllowAccess_whenBearerSchemeIsLowercase() throws Exception {
         // auth-scheme é case-insensitive por RFC 9110 §11.1: "bearer" deve autenticar igual a "Bearer"
-        FirebaseToken token = mock(FirebaseToken.class);
-        when(token.getUid()).thenReturn("lowercase-bearer-uid");
-        when(firebaseTokenService.validate(VALID_TOKEN)).thenReturn(token);
+        when(firebaseTokenService.validate(VALID_TOKEN))
+                .thenReturn(new FirebaseIdentity("lowercase-bearer-uid", "test@example.invalid"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "bearer " + VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -112,7 +108,7 @@ class FirebaseAuthIntegrationTest {
 
         @GetMapping("/whoami")
         Map<String, Object> whoAmI(Authentication authentication) {
-            return Map.of("uid", authentication.getName());
+            return Map.of("uid", ((FirebaseIdentity) authentication.getPrincipal()).uid());
         }
     }
 }

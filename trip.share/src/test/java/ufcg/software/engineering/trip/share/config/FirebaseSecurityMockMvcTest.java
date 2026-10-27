@@ -7,11 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.google.firebase.ErrorCode;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.FirebaseToken;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,6 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ufcg.software.engineering.trip.share.handlers.FirebaseAuthenticationFilter;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
+import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 
 /**
  * Testa o SecurityConfig + FirebaseAuthenticationFilter com Firebase mockado
@@ -86,18 +85,17 @@ class FirebaseSecurityMockMvcTest {
     @Test
     void shouldReturn401_whenTokenIsInvalid() throws Exception {
         when(firebaseTokenService.validate("invalid-token"))
-                .thenThrow(new FirebaseAuthException(ErrorCode.UNAUTHENTICATED, "INVALID_ID_TOKEN", null, null, null));
+                .thenThrow(new BadCredentialsException("Invalid Firebase token"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(result -> assertThat(result.getResponse().getContentAsString()).isEmpty());
+                .andExpect(content().json("{\"status\":401,\"message\":\"Invalid Firebase token\"}"));
     }
 
     @Test
     void shouldReturnUid_whenTokenIsValid_onProtectedEndpoint() throws Exception {
-        FirebaseToken token = mock(FirebaseToken.class);
-        when(token.getUid()).thenReturn("test-firebase-uid");
-        when(firebaseTokenService.validate(VALID_TOKEN)).thenReturn(token);
+        when(firebaseTokenService.validate(VALID_TOKEN))
+                .thenReturn(new FirebaseIdentity("test-firebase-uid", "test@example.invalid"));
 
         // Endpoint protegido responde com o UID do principal: prova de autenticação efetiva
         // dentro do SecurityFilterChain (não apenas de execução do filtro).
@@ -117,10 +115,10 @@ class FirebaseSecurityMockMvcTest {
 
     @RestController
     static class WhoAmIController {
-
+    
         @GetMapping("/whoami")
         Map<String, Object> whoAmI(Authentication authentication) {
-            return Map.of("uid", authentication.getName());
+            return Map.of("uid", ((FirebaseIdentity) authentication.getPrincipal()).uid());
         }
     }
 }

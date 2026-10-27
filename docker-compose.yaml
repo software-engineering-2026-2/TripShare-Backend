@@ -12,7 +12,18 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+<<<<<<< HEAD:trip.share/docker-compose.yaml
       FIREBASE_KEY_PATH: ${FIREBASE_KEY_PATH:-classpath:firebase/tripshare-firebase-key.json}
+=======
+      FIREBASE_KEY_PATH: file:/run/secrets/firebase.json
+    volumes:
+      - type: bind
+        source: ${FIREBASE_CREDENTIALS_FILE:-./.secrets/firebase.json}
+        target: /run/secrets/firebase.json
+        read_only: true
+        bind:
+          create_host_path: false
+>>>>>>> dc4f0e362f2ca469a28fa63ba4ab46397cb3687b:docker-compose.yaml
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,7 +41,7 @@ services:
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       FLYWAY_IGNORE_MIGRATION_PATTERNS: ""
     volumes:
-      - ./src/main/resources/db/migration:/app/src/main/resources/db/migration:ro
+      - ./trip.share/src/main/resources/db/migration:/app/src/main/resources/db/migration:ro
     depends_on:
       postgres:
         condition: service_healthy
