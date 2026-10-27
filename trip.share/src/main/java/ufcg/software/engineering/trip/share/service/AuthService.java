@@ -7,9 +7,10 @@ import jakarta.validation.constraints.Size;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.*;
+import ufcg.software.engineering.trip.share.exceptions.AuthException;
 import ufcg.software.engineering.trip.share.models.*;
 import ufcg.software.engineering.trip.share.repository.*;
-import static ufcg.software.engineering.trip.share.service.AuthException.Reason.*;
+import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reason.*;
 
 @Service
 public class AuthService {

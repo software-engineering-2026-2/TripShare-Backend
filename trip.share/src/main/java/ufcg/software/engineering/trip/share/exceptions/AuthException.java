@@ -1,4 +1,4 @@
-package ufcg.software.engineering.trip.share.service;
+package ufcg.software.engineering.trip.share.exceptions;
 
 public class AuthException extends RuntimeException {
     public enum Reason { UID_MISMATCH, INVALID_EMAIL, USER_NOT_FOUND, USER_SUSPENDED, DUPLICATE_USER }
