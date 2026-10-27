@@ -8,7 +8,8 @@ import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.models.UserStatus;
 import ufcg.software.engineering.trip.share.repository.UserRepository;
 
-import static ufcg.software.engineering.trip.share.service.AuthException.Reason.*;
+import ufcg.software.engineering.trip.share.exceptions.AuthException;
+import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reason.*;
 
 @Service
 public class UserService {
