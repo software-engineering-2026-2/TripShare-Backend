@@ -74,4 +74,19 @@ public class User {
         user.hometown = hometown;
         return user;
     }
+
+    public void updateProfile(String name, String phone, String bio, String hometown) {
+        if (name != null) {
+            this.name = name.trim();
+        }
+        if (phone != null) {
+            this.phone = phone;
+        }
+        if (bio != null) {
+            this.bio = bio;
+        }
+        if (hometown != null) {
+            this.hometown = hometown;
+        }
+    }
 }
