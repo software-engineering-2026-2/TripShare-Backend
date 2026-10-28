@@ -33,6 +33,7 @@ public class UserService {
         return UserResponse.from(userRepository.saveAndFlush(user));
     }
 
+    @Transactional(readOnly = true)
     public UserPublicResponse getPublicInfoProfile(String id) {
         User user = userRepository.findByAuthUuid(id)
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
@@ -40,7 +41,7 @@ public class UserService {
         if (user.getStatus() == UserStatus.SUSPENDED) {
             throw new AuthException(USER_SUSPENDED);
         }
-        
+
         return UserPublicResponse.from(user);
     }
 }

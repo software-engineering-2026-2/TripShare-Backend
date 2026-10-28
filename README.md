@@ -138,9 +138,9 @@ O frontend cadastra/autentica a conta no Firebase e obtém o **ID token**. A API
 `http://localhost:8080`; em ambiente publicado, envie os tokens por HTTPS. O UID Firebase é uma string
 opaca, armazenada em `auth.uuid`; os IDs internos de `auth` e `users` são UUIDs distintos.
 
-Os endpoints autenticados exigem `Authorization: Bearer <firebase-id-token>`. O backend verifica o token.
-No cadastro e no login, também exige igualdade exata entre o UID verificado e `uuid` no corpo. A consulta
-pública de perfil não exige token. Não há senha nem emissão de token no backend.
+Todos os endpoints exigem `Authorization: Bearer <firebase-id-token>`. O backend verifica o token.
+No cadastro e no login, também exige igualdade exata entre o UID verificado e `uuid` no corpo. Não há
+senha nem emissão de token no backend.
 
 ### Endpoints disponíveis
 
@@ -148,7 +148,7 @@ pública de perfil não exige token. Não há senha nem emissão de token no bac
 |--------|---------|--------------|-----------|
 | `POST` | `/auth/register` | Firebase ID token | Cria o perfil local associado à conta Firebase. Retorna `201`. |
 | `POST` | `/auth/login` | Firebase ID token | Busca o perfil existente associado ao UID Firebase. Retorna `200`. |
-| `GET` | `/users/{id}` | Pública | Retorna informações públicas do perfil identificado por `id`. |
+| `GET` | `/users/{id}` | Firebase ID token | Retorna informações públicas do perfil identificado por `id`. |
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
 
 ### Cadastro de perfil
@@ -211,7 +211,7 @@ Cadastro e login retornam o mesmo formato:
 
 `GET /users/{id}` recebe o UID Firebase no parâmetro `id` e retorna `username`, `name`, `bio` e
 `hometown`. Perfil inexistente retorna `404`; perfil suspenso retorna `403` (`User is suspended`).
-Este endpoint não exige cabeçalho de autenticação.
+Este endpoint exige `Authorization: Bearer <firebase-id-token>`.
 
 Exemplo de resposta (`200`):
 
