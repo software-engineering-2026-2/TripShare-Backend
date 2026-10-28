@@ -138,8 +138,18 @@ O frontend cadastra/autentica a conta no Firebase e obtém o **ID token**. A API
 `http://localhost:8080`; em ambiente publicado, envie os tokens por HTTPS. O UID Firebase é uma string
 opaca, armazenada em `auth.uuid`; os IDs internos de `auth` e `users` são UUIDs distintos.
 
-Ambos os endpoints exigem `Authorization: Bearer <firebase-id-token>`. O backend verifica o token e
-exige igualdade exata entre o UID verificado e `uuid` no corpo. Não há senha nem emissão de token no backend.
+Os endpoints autenticados exigem `Authorization: Bearer <firebase-id-token>`. O backend verifica o token.
+No cadastro e no login, também exige igualdade exata entre o UID verificado e `uuid` no corpo. A consulta
+pública de perfil não exige token. Não há senha nem emissão de token no backend.
+
+### Endpoints disponíveis
+
+| Método | Caminho | Autenticação | Descrição |
+|--------|---------|--------------|-----------|
+| `POST` | `/auth/register` | Firebase ID token | Cria o perfil local associado à conta Firebase. Retorna `201`. |
+| `POST` | `/auth/login` | Firebase ID token | Busca o perfil existente associado ao UID Firebase. Retorna `200`. |
+| `GET` | `/users/{id}` | Pública | Retorna informações públicas do perfil identificado por `id`. |
+| `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
 
 ### Cadastro de perfil
 
@@ -161,8 +171,9 @@ Telefone é opcional e,
 quando enviado, deve seguir E.164. `bio` e `hometown` são opcionais. O email vem do token e deve ser
 válido, com até 254 caracteres. Papéis e status enviados pelo cliente não alteram os padrões `USER` e `ACTIVE`.
 
-Retorna `201`. UID, email ou username já cadastrado retorna `409`; email e username são únicos sem
-diferenciar maiúsculas de minúsculas. `auth` e perfil são criados na mesma transação.
+Retorna `201` com o corpo de resposta de usuário abaixo. UID, email ou username já cadastrado retorna
+`409`; email e username são únicos sem diferenciar maiúsculas de minúsculas. `auth` e perfil são criados
+na mesma transação.
 
 ### Login
 
@@ -172,8 +183,9 @@ diferenciar maiúsculas de minúsculas. `auth` e perfil são criados na mesma tr
 {"uuid":"uid-retornado-pelo-firebase"}
 ```
 
-Retorna `200` com o perfil existente. Perfil ausente retorna `404`; o frontend deve realizar o cadastro
-separado. Perfil suspenso retorna `403`. O login não cadastra nem altera dados automaticamente.
+Retorna `200` com o perfil existente no formato de resposta abaixo. Perfil ausente retorna `404`; o
+frontend deve realizar o cadastro separado. Perfil suspenso retorna `403`. O login não cadastra nem
+altera dados automaticamente.
 
 Cadastro e login retornam o mesmo formato:
 
@@ -192,6 +204,59 @@ Cadastro e login retornam o mesmo formato:
   "status": "ACTIVE",
   "createdAt": "2026-10-24T12:00:00Z",
   "updatedAt": "2026-10-24T12:00:00Z"
+}
+```
+
+### Consulta pública de perfil
+
+`GET /users/{id}` recebe o UID Firebase no parâmetro `id` e retorna `username`, `name`, `bio` e
+`hometown`. Perfil inexistente retorna `404`; perfil suspenso retorna `403` (`User is suspended`).
+Este endpoint não exige cabeçalho de autenticação.
+
+Exemplo de resposta (`200`):
+
+```json
+{
+  "username": "viajante",
+  "name": "Nome do usuário",
+  "bio": "Gosto de viajar",
+  "hometown": "Campina Grande"
+}
+```
+
+### Atualização do próprio perfil
+
+`PATCH /users/me` atualiza parcialmente o perfil associado à identidade do Firebase autenticada. Envie
+somente os campos que deseja alterar; `name`, `phone`, `bio` e `hometown` são opcionais:
+
+```json
+{
+  "name": "Nome atualizado",
+  "phone": "+5583999999999",
+  "bio": "Gosto de viajar",
+  "hometown": "Campina Grande"
+}
+```
+
+`name` aceita até 120 caracteres e não pode ser vazio quando informado; `phone` é opcional e, quando
+informado, deve seguir E.164 (até 32 caracteres). `bio` aceita até 500 caracteres e `hometown` até 120.
+O endpoint retorna `200` com o perfil atualizado no mesmo formato da resposta de cadastro e login:
+
+```json
+{
+  "id": "UUID interno do usuário",
+  "authId": "UUID interno da identidade",
+  "uuid": "uid-retornado-pelo-firebase",
+  "username": "viajante",
+  "name": "Nome atualizado",
+  "email": "usuario@example.com",
+  "phone": "+5583999999999",
+  "bio": "Gosto de viajar",
+  "hometown": "Campina Grande",
+  "role": "USER",
+  "status": "ACTIVE",
+  "createdAt": "2026-10-24T12:00:00Z",
+  "updatedAt": "2026-10-27T12:00:00Z"
 }
 ```
 
