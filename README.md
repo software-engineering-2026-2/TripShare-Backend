@@ -209,7 +209,7 @@ Cadastro e login retornam o mesmo formato:
 
 ### Consulta pública de perfil
 
-`GET /users/{id}` recebe o UID Firebase no parâmetro `id` e retorna `username`, `name`, `bio` e
+`GET /users/{id}` recebe o UUID interno do usuário (`id`) no parâmetro `id` e retorna `username`, `name`, `bio` e
 `hometown`. Perfil inexistente retorna `404`; perfil suspenso retorna `403` (`User is suspended`).
 Este endpoint exige `Authorization: Bearer <firebase-id-token>`.
 

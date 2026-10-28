@@ -1,6 +1,6 @@
 package ufcg.software.engineering.trip.share.controller;
 
-
+import java.util.UUID;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -19,12 +19,8 @@ public class UserController {
         this.userService = userService;
     }
 
-    /*
-    * Rever com o pessoal depois se o UID passado no endpoint é o do Firebase ou o criado pelo nosso BD.
-    * (unificar o formato)
-    * */
     @GetMapping("/{id}")
-    public UserPublicResponse getPublicInfoProfile(@PathVariable String id) {
+    public UserPublicResponse getPublicInfoProfile(@PathVariable UUID id) {
         return userService.getPublicInfoProfile(id);
     }
 

@@ -1,5 +1,6 @@
 package ufcg.software.engineering.trip.share.service;
 
+import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import ufcg.software.engineering.trip.share.dto.UpdateUserRequest;
@@ -34,8 +35,8 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public UserPublicResponse getPublicInfoProfile(String id) {
-        User user = userRepository.findByAuthUuid(id)
+    public UserPublicResponse getPublicInfoProfile(UUID id) {
+        User user = userRepository.findById(id)
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
 
         if (user.getStatus() == UserStatus.SUSPENDED) {

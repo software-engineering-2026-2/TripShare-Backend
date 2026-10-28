@@ -206,7 +206,10 @@ class UserProfileApiTest {
 
     @Test
     void getPublicProfile_registeredUser_shouldReturnOnlyPublicFields() throws Exception {
-        var body = getProfile(BOB_UID, ALICE_TOKEN)
+        var bob = snapshot(BOB_UID);
+
+        // bob.id() to get internal UUID instead of FireBase BOB_UID
+        var body = getProfile(bob.id(), ALICE_TOKEN)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("bob"))
                 .andExpect(jsonPath("$.name").value("Bob"))
@@ -232,7 +235,8 @@ class UserProfileApiTest {
                 {"name":"Alice Souza","bio":"Mochileira","hometown":"João Pessoa"}
                 """).andExpect(status().isOk());
 
-        var body = getProfile(ALICE_UID, BOB_TOKEN)
+        var alice = snapshot(ALICE_UID);
+        var body = getProfile(alice.id(), BOB_TOKEN)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("alice"))
                 .andExpect(jsonPath("$.name").value("Alice Souza"))
@@ -246,7 +250,8 @@ class UserProfileApiTest {
 
     @Test
     void getPublicProfile_withoutToken_shouldReturn401() throws Exception {
-        getProfile(BOB_UID, null)
+        var bob = snapshot(BOB_UID);
+        getProfile(bob.id(), null)
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("WWW-Authenticate", "Bearer"))
                 .andExpect(jsonPath("$.status").value(401))
@@ -254,8 +259,8 @@ class UserProfileApiTest {
     }
 
     @Test
-    void getPublicProfile_unknownUid_shouldReturn404() throws Exception {
-        getProfile("unknown-uid", ALICE_TOKEN)
+    void getPublicProfile_unknownId_shouldReturn404() throws Exception {
+        getProfile("00000000-0000-0000-0000-000000000000", ALICE_TOKEN)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("User profile not found"));
@@ -265,21 +270,12 @@ class UserProfileApiTest {
     void getPublicProfile_suspendedUser_shouldReturn403WithoutPublicData() throws Exception {
         jdbc.update("UPDATE users SET status = 'SUSPENDED' WHERE username = 'bob'");
 
-        getProfile(BOB_UID, ALICE_TOKEN)
+        var bob = snapshot(BOB_UID);
+        getProfile(bob.id(), ALICE_TOKEN)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.message").value("User is suspended"))
                 .andExpect(jsonPath("$.username").doesNotExist())
                 .andExpect(jsonPath("$.email").doesNotExist());
-    }
-
-    @Test
-    void getPublicProfile_internalUserId_shouldReturn404() throws Exception {
-        var alice = snapshot(ALICE_UID);
-
-        getProfile(alice.id(), BOB_TOKEN)
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.message").value("User profile not found"));
     }
 }
