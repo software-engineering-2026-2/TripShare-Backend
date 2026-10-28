@@ -3,6 +3,7 @@ package ufcg.software.engineering.trip.share.service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import ufcg.software.engineering.trip.share.dto.UpdateUserRequest;
+import ufcg.software.engineering.trip.share.dto.UserPublicResponse;
 import ufcg.software.engineering.trip.share.dto.UserResponse;
 import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.models.UserStatus;
@@ -32,4 +33,10 @@ public class UserService {
         return UserResponse.from(userRepository.saveAndFlush(user));
     }
 
+    public UserPublicResponse getPublicInfoProfile(String id) {
+        User user = userRepository.findByAuthUuid(id)
+                .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
+
+        return UserPublicResponse.from(user);
+    }
 }
