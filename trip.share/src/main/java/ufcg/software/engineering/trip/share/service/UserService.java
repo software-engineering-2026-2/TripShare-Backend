@@ -37,6 +37,10 @@ public class UserService {
         User user = userRepository.findByAuthUuid(id)
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
 
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new AuthException(USER_SUSPENDED);
+        }
+        
         return UserPublicResponse.from(user);
     }
 }
