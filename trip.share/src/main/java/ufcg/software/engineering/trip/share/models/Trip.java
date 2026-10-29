@@ -32,13 +32,13 @@ public class Trip {
     @Column(nullable = false, columnDefinition = "text")
     private String title;
 
-    @Column(name = "starts_on", nullable = false)
+    @Column(name = "starts_on")
     private LocalDate startsOn;
 
-    @Column(name = "ends_on", nullable = false)
+    @Column(name = "ends_on")
     private LocalDate endsOn;
 
-    @Column(name = "duration_days", insertable = false, updatable = false)
+    @Column(name = "duration_days", nullable = false)
     private Integer durationDays;
 
     @Column(name = "pace_code", columnDefinition = "text")
@@ -61,13 +61,28 @@ public class Trip {
 
     public static Trip create(User user, Destination destination, String title,
                               LocalDate startsOn, LocalDate endsOn) {
+        return create(
+                user,
+                destination,
+                title,
+                Objects.requireNonNull(startsOn),
+                Objects.requireNonNull(endsOn),
+                calculateDurationDays(startsOn, endsOn));
+    }
+
+    public static Trip create(User user, Destination destination, String title, int durationDays) {
+        return create(user, destination, title, null, null, durationDays);
+    }
+
+    private static Trip create(User user, Destination destination, String title,
+                               LocalDate startsOn, LocalDate endsOn, int durationDays) {
         Trip trip = new Trip();
         trip.user = Objects.requireNonNull(user);
         trip.destination = Objects.requireNonNull(destination);
         trip.title = Objects.requireNonNull(title).trim();
-        trip.startsOn = Objects.requireNonNull(startsOn);
-        trip.endsOn = Objects.requireNonNull(endsOn);
-        trip.durationDays = calculateDurationDays(startsOn, endsOn);
+        trip.startsOn = startsOn;
+        trip.endsOn = endsOn;
+        trip.durationDays = durationDays;
         return trip;
     }
 

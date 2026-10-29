@@ -3,6 +3,7 @@ package ufcg.software.engineering.trip.share.service;
 import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reason.USER_NOT_FOUND;
 import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reason.USER_SUSPENDED;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.DESTINATION_NOT_FOUND;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_DURATION;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PERIOD;
 
 import org.springframework.stereotype.Service;
@@ -40,13 +41,32 @@ public class TripService {
         if (user.getStatus() == UserStatus.SUSPENDED) {
             throw new AuthException(USER_SUSPENDED);
         }
-        if (request.endsOn().isBefore(request.startsOn())) {
-            throw new TripException(INVALID_PERIOD);
-        }
+        validatePeriodOrDuration(request);
         Destination destination = destinationRepository.findById(request.destinationId())
                 .orElseThrow(() -> new TripException(DESTINATION_NOT_FOUND));
 
-        Trip trip = Trip.create(user, destination, request.title(), request.startsOn(), request.endsOn());
+        Trip trip = request.startsOn() != null
+                ? Trip.create(user, destination, request.title(), request.startsOn(), request.endsOn())
+                : Trip.create(user, destination, request.title(), request.durationDays());
         return TripResponse.from(tripRepository.saveAndFlush(trip));
+    }
+
+    private void validatePeriodOrDuration(CreateTripRequest request) {
+        boolean hasStartsOn = request.startsOn() != null;
+        boolean hasEndsOn = request.endsOn() != null;
+        if (hasStartsOn != hasEndsOn) {
+            throw new TripException(INVALID_DURATION);
+        }
+        if (hasStartsOn) {
+            if (request.endsOn().isBefore(request.startsOn())) {
+                throw new TripException(INVALID_PERIOD);
+            }
+            int calculatedDays = Trip.calculateDurationDays(request.startsOn(), request.endsOn());
+            if (request.durationDays() != null && request.durationDays() != calculatedDays) {
+                throw new TripException(INVALID_DURATION);
+            }
+        } else if (request.durationDays() == null || request.durationDays() <= 0) {
+            throw new TripException(INVALID_DURATION);
+        }
     }
 }

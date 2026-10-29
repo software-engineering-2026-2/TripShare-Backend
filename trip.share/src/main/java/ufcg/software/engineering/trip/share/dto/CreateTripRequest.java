@@ -8,6 +8,7 @@ import java.util.UUID;
 public record CreateTripRequest(
         @NotBlank String title,
         @NotNull UUID destinationId,
-        @NotNull LocalDate startsOn,
-        @NotNull LocalDate endsOn) {
+        LocalDate startsOn,
+        LocalDate endsOn,
+        Integer durationDays) {
 }

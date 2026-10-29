@@ -116,6 +116,26 @@ class TripApiTest {
     }
 
     @Test
+    void createTrip_onlyDurationDaysWithoutDates_shouldReturn201WithNullDates() throws Exception {
+        postTrip("""
+                {
+                  "title": "Roteiro de 5 dias no Rio",
+                  "destinationId": "%s",
+                  "durationDays": 5
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Roteiro de 5 dias no Rio"))
+                .andExpect(jsonPath("$.startsOn").isEmpty())
+                .andExpect(jsonPath("$.endsOn").isEmpty())
+                .andExpect(jsonPath("$.durationDays").value(5));
+
+        assertThat(jdbc.queryForObject("SELECT duration_days FROM trips", Integer.class)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT starts_on FROM trips", Object.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT ends_on FROM trips", Object.class)).isNull();
+    }
+
+    @Test
     void createTrip_endDateBeforeStartDate_shouldReturn400WithoutSaving() throws Exception {
         postTrip("""
                 {
@@ -128,6 +148,37 @@ class TripApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("End date cannot be before start date"));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM trips", Integer.class)).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            """
+            {"title":"Viagem","destinationId":"%s"}
+            """,
+            """
+            {"title":"Viagem","destinationId":"%s","durationDays":0}
+            """,
+            """
+            {"title":"Viagem","destinationId":"%s","durationDays":-3}
+            """,
+            """
+            {"title":"Viagem","destinationId":"%s","startsOn":"2027-01-10"}
+            """,
+            """
+            {"title":"Viagem","destinationId":"%s","endsOn":"2027-01-12"}
+            """,
+            """
+            {"title":"Viagem","destinationId":"%s","startsOn":"2027-01-10","endsOn":"2027-01-12","durationDays":5}
+            """
+    })
+    void createTrip_invalidDurationOrIncompleteDates_shouldReturn400WithoutSaving(String template) throws Exception {
+        postTrip(template.formatted(destinationId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message")
+                        .value("Trip must specify a valid date range or a positive duration in days"));
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM trips", Integer.class)).isZero();
     }
@@ -156,12 +207,6 @@ class TripApiTest {
             """,
             """
             {"title":"Viagem","startsOn":"2027-01-10","endsOn":"2027-01-12"}
-            """,
-            """
-            {"title":"Viagem","destinationId":"00000000-0000-0000-0000-000000000001","endsOn":"2027-01-12"}
-            """,
-            """
-            {"title":"Viagem","destinationId":"00000000-0000-0000-0000-000000000001","startsOn":"2027-01-10"}
             """,
             """
             {"title":"Viagem","destinationId":"00000000-0000-0000-0000-000000000001","startsOn":"invalid-date","endsOn":"2027-01-12"}
