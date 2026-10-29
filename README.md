@@ -150,6 +150,7 @@ senha nem emissão de token no backend.
 | `POST` | `/auth/login` | Firebase ID token | Busca o perfil existente associado ao UID Firebase. Retorna `200`. |
 | `GET` | `/users/{id}` | Firebase ID token | Retorna informações públicas do perfil identificado por `id`. |
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
+| `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
 
 ### Cadastro de perfil
 
@@ -259,6 +260,54 @@ O endpoint retorna `200` com o perfil atualizado no mesmo formato da resposta de
   "updatedAt": "2026-10-27T12:00:00Z"
 }
 ```
+
+### Criação de viagem
+
+`POST /trips` cria uma viagem vinculada ao perfil associado à identidade do Firebase autenticada.
+
+Com intervalo de datas definido (`startsOn` e `endsOn` calculam `durationDays = endsOn - startsOn + 1`):
+
+```json
+{
+  "title": "Férias no Rio",
+  "destinationId": "UUID do destino cadastrado",
+  "startsOn": "2027-01-10",
+  "endsOn": "2027-01-14"
+}
+```
+
+Ou informando apenas a duração em dias (`durationDays > 0`, sem `startsOn` e `endsOn`):
+
+```json
+{
+  "title": "Roteiro de 5 dias no Rio",
+  "destinationId": "UUID do destino cadastrado",
+  "durationDays": 5
+}
+```
+
+`title` (não vazio; espaços nas extremidades são removidos com `trim()`) e `destinationId` (UUID existente em `destinations`) são obrigatórios. A viagem deve informar um intervalo válido (`startsOn` e `endsOn` com `endsOn >= startsOn`) ou uma duração positiva (`durationDays > 0`).
+
+Exemplo de resposta (`201`):
+
+```json
+{
+  "id": "UUID interno da viagem",
+  "userId": "UUID interno do usuário proprietário",
+  "destinationId": "UUID do destino",
+  "destinationName": "Rio de Janeiro",
+  "destinationRegion": "Rio de Janeiro",
+  "destinationCountryCode": "BR",
+  "title": "Férias no Rio",
+  "startsOn": "2027-01-10",
+  "endsOn": "2027-01-14",
+  "durationDays": 5,
+  "createdAt": "2026-10-28T12:00:00Z",
+  "updatedAt": "2026-10-28T12:00:00Z"
+}
+```
+
+Quando criada apenas com `durationDays`, os campos `startsOn` e `endsOn` retornam `null`. Datas invertidas (`endsOn < startsOn`), duração inválida/ausente ou datas incompletas retornam `400`; destino ou perfil do usuário inexistente retorna `404`; usuário suspenso retorna `403`.
 
 Erros esperados retornam `{"status":400,"message":"Invalid request body"}`, com status e mensagem
 correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/expirado ou UID divergente,
