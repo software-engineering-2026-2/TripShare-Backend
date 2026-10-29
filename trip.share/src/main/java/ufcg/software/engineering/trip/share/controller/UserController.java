@@ -1,13 +1,11 @@
 package ufcg.software.engineering.trip.share.controller;
 
-
+import java.util.UUID;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import ufcg.software.engineering.trip.share.dto.UpdateUserRequest;
+import ufcg.software.engineering.trip.share.dto.UserPublicResponse;
 import ufcg.software.engineering.trip.share.dto.UserResponse;
 import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 import ufcg.software.engineering.trip.share.service.UserService;
@@ -19,6 +17,11 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @GetMapping("/{id}")
+    public UserPublicResponse getPublicInfoProfile(@PathVariable UUID id) {
+        return userService.getPublicInfoProfile(id);
     }
 
     @PatchMapping("/me")

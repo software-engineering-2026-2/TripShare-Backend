@@ -1,8 +1,10 @@
 package ufcg.software.engineering.trip.share.service;
 
+import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import ufcg.software.engineering.trip.share.dto.UpdateUserRequest;
+import ufcg.software.engineering.trip.share.dto.UserPublicResponse;
 import ufcg.software.engineering.trip.share.dto.UserResponse;
 import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.models.UserStatus;
@@ -32,4 +34,15 @@ public class UserService {
         return UserResponse.from(userRepository.saveAndFlush(user));
     }
 
+    @Transactional(readOnly = true)
+    public UserPublicResponse getPublicInfoProfile(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
+
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new AuthException(USER_SUSPENDED);
+        }
+
+        return UserPublicResponse.from(user);
+    }
 }
