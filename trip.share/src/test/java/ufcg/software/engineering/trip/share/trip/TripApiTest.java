@@ -1,11 +1,16 @@
 package ufcg.software.engineering.trip.share.trip;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,14 +19,18 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import ufcg.software.engineering.trip.share.models.Destination;
+import ufcg.software.engineering.trip.share.models.TripDay;
 import ufcg.software.engineering.trip.share.repository.DestinationRepository;
+import ufcg.software.engineering.trip.share.repository.TripDayRepository;
 import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
@@ -33,11 +42,13 @@ class TripApiTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private DestinationRepository destinationRepository;
     @MockitoBean private FirebaseTokenService tokenService;
+    @MockitoSpyBean private TripDayRepository tripDayRepository;
 
     private UUID destinationId;
 
     @BeforeEach
     void prepare() throws Exception {
+        jdbc.update("DELETE FROM trip_days");
         jdbc.update("DELETE FROM trips");
         jdbc.update("DELETE FROM destinations");
         jdbc.update("DELETE FROM users");
@@ -287,5 +298,104 @@ class TripApiTest {
                 .andExpect(jsonPath("$.message").value("User is suspended"));
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM trips", Integer.class)).isZero();
+    }
+
+    @Test
+    void createTrip_dateRange_shouldCreateOneEmptyDayForEachDayOfPeriod() throws Exception {
+        postTrip("""
+                {
+                  "title": "Quatro dias",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-13"
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        assertThat(jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId)).containsExactly(1, 2, 3, 4);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(DISTINCT day_number) FROM trip_days WHERE trip_id = ?",
+                Integer.class, tripId)).isEqualTo(4);
+        assertThat(tripDayRepository.findByTripIdOrderByDayNumberAsc(tripId))
+                .extracting(TripDay::getDate)
+                .containsExactly(
+                        LocalDate.of(2026, 11, 10),
+                        LocalDate.of(2026, 11, 11),
+                        LocalDate.of(2026, 11, 12),
+                        LocalDate.of(2026, 11, 13));
+    }
+
+    @Test
+    void createTrip_onlyDurationDays_shouldCreateOneEmptyDayForEachDayOfDuration() throws Exception {
+        postTrip("""
+                {
+                  "title": "Três dias",
+                  "destinationId": "%s",
+                  "durationDays": 3
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        assertThat(jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId)).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void createTrip_sameDay_shouldCreateSingleDay() throws Exception {
+        postTrip("""
+                {
+                  "title": "Bate e volta",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-10"
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        assertThat(jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ?",
+                Integer.class, tripId)).containsExactly(1);
+    }
+
+    @Test
+    void createTrip_duplicateDayForSameTrip_shouldBeRejected() throws Exception {
+        postTrip("""
+                {
+                  "title": "Dois dias",
+                  "destinationId": "%s",
+                  "durationDays": 2
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO trip_days (id, trip_id, day_number) VALUES (?, ?, ?)",
+                UUID.randomUUID(), tripId, 1))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void createTrip_dayCreationFailure_shouldRollBackTrip() throws Exception {
+        doThrow(new DataIntegrityViolationException("forced day failure"))
+                .when(tripDayRepository).saveAll(any());
+
+        postTrip("""
+                {
+                  "title": "Viagem revertida",
+                  "destinationId": "%s",
+                  "durationDays": 2
+                }
+                """.formatted(destinationId))
+                .andExpect(status().isInternalServerError());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM trips", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM trip_days", Integer.class)).isZero();
     }
 }

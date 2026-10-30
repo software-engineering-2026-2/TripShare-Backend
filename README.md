@@ -309,6 +309,8 @@ Exemplo de resposta (`201`):
 
 Quando criada apenas com `durationDays`, os campos `startsOn` e `endsOn` retornam `null`. Datas invertidas (`endsOn < startsOn`), duração inválida/ausente ou datas incompletas retornam `400`; destino ou perfil do usuário inexistente retorna `404`; usuário suspenso retorna `403`.
 
+Na mesma transação, a API cria um registro vazio em `trip_days` para cada dia da viagem, numerado de `1` a `durationDays`. O dia `1` corresponde a `startsOn` e o último a `endsOn`; viagens criadas apenas com `durationDays` possuem os dias numerados, mas sem datas. A restrição `uq_trip_days_number` impede dias duplicados na mesma viagem. Esses dias ficam disponíveis para o gerenciamento de atividades por dia.
+
 Erros esperados retornam `{"status":400,"message":"Invalid request body"}`, com status e mensagem
 correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/expirado ou UID divergente,
 `403` para suspensão, `404` para perfil ausente e `409` para duplicidade. Indisponibilidade de Firebase

@@ -6,6 +6,9 @@ import static ufcg.software.engineering.trip.share.exceptions.TripException.Reas
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_DURATION;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PERIOD;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
@@ -14,22 +17,27 @@ import ufcg.software.engineering.trip.share.exceptions.AuthException;
 import ufcg.software.engineering.trip.share.exceptions.TripException;
 import ufcg.software.engineering.trip.share.models.Destination;
 import ufcg.software.engineering.trip.share.models.Trip;
+import ufcg.software.engineering.trip.share.models.TripDay;
 import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.models.UserStatus;
 import ufcg.software.engineering.trip.share.repository.DestinationRepository;
+import ufcg.software.engineering.trip.share.repository.TripDayRepository;
 import ufcg.software.engineering.trip.share.repository.TripRepository;
 import ufcg.software.engineering.trip.share.repository.UserRepository;
 
 @Service
 public class TripService {
     private final TripRepository tripRepository;
+    private final TripDayRepository tripDayRepository;
     private final DestinationRepository destinationRepository;
     private final UserRepository userRepository;
 
     public TripService(TripRepository tripRepository,
+                       TripDayRepository tripDayRepository,
                        DestinationRepository destinationRepository,
                        UserRepository userRepository) {
         this.tripRepository = tripRepository;
+        this.tripDayRepository = tripDayRepository;
         this.destinationRepository = destinationRepository;
         this.userRepository = userRepository;
     }
@@ -48,7 +56,17 @@ public class TripService {
         Trip trip = request.startsOn() != null
                 ? Trip.create(user, destination, request.title(), request.startsOn(), request.endsOn())
                 : Trip.create(user, destination, request.title(), request.durationDays());
+        tripRepository.save(trip);
+        createEmptyDays(trip);
         return TripResponse.from(tripRepository.saveAndFlush(trip));
+    }
+
+    private void createEmptyDays(Trip trip) {
+        List<TripDay> days = new ArrayList<>(trip.getDurationDays());
+        for (int dayNumber = 1; dayNumber <= trip.getDurationDays(); dayNumber++) {
+            days.add(TripDay.create(trip, dayNumber));
+        }
+        tripDayRepository.saveAll(days);
     }
 
     private void validatePeriodOrDuration(CreateTripRequest request) {
