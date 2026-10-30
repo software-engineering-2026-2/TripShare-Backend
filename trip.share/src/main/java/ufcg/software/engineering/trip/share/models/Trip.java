@@ -18,6 +18,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -36,15 +37,19 @@ public class Trip {
     private User user;
 
     @Column(name = "destination_id", nullable = false)
+    @Setter
     private UUID destinationId;
 
     @Column(nullable = false, columnDefinition = "text")
+    @Setter
     private String title;
 
     @Column(name = "starts_on", nullable = false)
+    @Setter
     private LocalDate startsOn;
 
     @Column(name = "ends_on", nullable = false)
+    @Setter
     private LocalDate endsOn;
 
     @Column(name = "duration_days", insertable = false, updatable = false)

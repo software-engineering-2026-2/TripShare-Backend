@@ -23,6 +23,15 @@ public class ApiExceptionHandler {
         };
     }
 
+    @ExceptionHandler(TripException.class)
+    public ResponseEntity<ErrorResponse> trip(TripException exception) {
+        return switch (exception.reason()) {
+            case TRIP_NOT_FOUND -> error(HttpStatus.NOT_FOUND, "Trip not found");
+            case TRIP_FORBIDDEN -> error(HttpStatus.FORBIDDEN, "You do not own this trip");
+            case INVALID_PERIOD -> error(HttpStatus.BAD_REQUEST, "Trip period is invalid");
+        };
+    }
+
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ErrorResponse> invalidRequest(Exception exception) {
         return error(HttpStatus.BAD_REQUEST, "Invalid request body");
