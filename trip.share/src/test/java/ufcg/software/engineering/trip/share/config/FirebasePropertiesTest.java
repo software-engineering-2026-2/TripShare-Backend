@@ -5,14 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class FirebasePropertiesTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(PropertiesConfig.class)
-            .withPropertyValues("app.firebase.key-path=${FIREBASE_KEY_PATH:}");
+            .withInitializer(new ConfigDataApplicationContextInitializer())
+            .withInitializer(context -> context.getEnvironment().getPropertySources()
+                    .remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME));
 
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(FirebaseProperties.class)
@@ -20,11 +24,17 @@ class FirebasePropertiesTest {
     }
 
     @Test
+    void bind_withoutEnvironmentVariable_shouldUseLocalCredentialPath() {
+        runner.run(context -> assertThat(context.getBean(FirebaseProperties.class).keyPath())
+                .isEqualTo("file:../.secrets/firebase.json"));
+    }
+
+    @Test
     void bind_environmentVariable_shouldResolveExternalCredentialPath() {
         runner.withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
-                new SystemEnvironmentPropertySource("test-env", Map.of("FIREBASE_KEY_PATH", "file:/external/firebase.json"))))
+                new SystemEnvironmentPropertySource("test-env", Map.of("FIREBASE_KEY_PATH", "file:/run/secrets/firebase.json"))))
                 .run(context -> assertThat(context.getBean(FirebaseProperties.class).keyPath())
-                        .isEqualTo("file:/external/firebase.json"));
+                        .isEqualTo("file:/run/secrets/firebase.json"));
     }
 
     @Test

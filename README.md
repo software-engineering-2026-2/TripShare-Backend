@@ -15,10 +15,13 @@ O projeto é uma aplicação **Spring Boot 4.1.1** (Java 17) construída com **M
 
 ### Localmente
 
+Coloque o JSON da conta de serviço em `.secrets/firebase.json`, na raiz do repositório.
+O caminho local padrão considera a execução dentro de `trip.share/`:
+
 ```bash
 cd trip.share
-export FIREBASE_KEY_PATH=file:/caminho/absoluto/firebase.json
-./mvnw spring-boot:run
+./mvnw spring-boot:run \
+  -Dspring-boot.run.arguments="--spring.docker.compose.file=../docker-compose.yaml"
 ```
 
 O `spring-boot-docker-compose` inicia somente PostgreSQL e configura a conexão da aplicação local
@@ -28,7 +31,6 @@ evitando duas aplicações na porta 8080. Não ative esse perfil ao executar a a
 ### Com Docker
 
 ```bash
-export FIREBASE_CREDENTIALS_FILE=/caminho/absoluto/firebase.json
 # Na raiz do repositório:
 docker compose --profile app up --build
 ```
@@ -36,7 +38,9 @@ docker compose --profile app up --build
 A credencial é o JSON de uma conta de serviço do projeto Firebase usado pelo frontend.
 O arquivo é montado somente para leitura. A aplicação exige a credencial; os comandos de banco e
 os testes comuns não precisam dela. Nunca versione esse arquivo. `FIREBASE_KEY_PATH` configura a
-JVM local; `FIREBASE_CREDENTIALS_FILE` configura o caminho no host para Docker.
+JVM local; `FIREBASE_CREDENTIALS_FILE` configura o caminho no host para Docker. Ambas são opcionais
+quando o arquivo está em `.secrets/firebase.json` na raiz: localmente é usado o caminho padrão,
+e o Compose monta o arquivo em `/run/secrets/firebase.json` e informa esse caminho automaticamente.
 
 Sobem o banco, o migrador e a aplicação; o migrador termina antes de a aplicação iniciar:
 
