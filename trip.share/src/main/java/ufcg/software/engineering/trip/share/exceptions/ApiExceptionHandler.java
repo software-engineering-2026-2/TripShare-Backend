@@ -1,4 +1,4 @@
-package ufcg.software.engineering.trip.share.handlers;
+package ufcg.software.engineering.trip.share.exceptions;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DataAccessException;
@@ -9,7 +9,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ufcg.software.engineering.trip.share.dto.ErrorResponse;
-import ufcg.software.engineering.trip.share.service.AuthException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {

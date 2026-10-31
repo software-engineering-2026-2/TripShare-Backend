@@ -4,7 +4,7 @@ TRUNCATE TABLE users CASCADE;
 
 DROP TABLE user_sessions;
 DROP TABLE password_reset_tokens;
-ALTER TABLE users DROP COLUMN password_hash;
+ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
 
 CREATE TABLE auth (
     id uuid DEFAULT gen_random_uuid() CONSTRAINT pk_auth PRIMARY KEY,

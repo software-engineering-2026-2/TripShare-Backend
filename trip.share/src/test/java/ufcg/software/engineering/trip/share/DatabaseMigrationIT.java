@@ -134,7 +134,7 @@ class DatabaseMigrationIT {
     void migrate_previousVersion_shouldResetLegacyUsersAndPreserveCatalogs() throws SQLException {
         var earlier = Flyway.configure().configuration(flyway().getConfiguration()).target("6").load();
         earlier.migrate();
-        execute("INSERT INTO users(id, username, name, email, password_hash) VALUES ('" + USER + "','existing', 'Existing User', 'existing@example.invalid', repeat('x', 60))");
+        execute("INSERT INTO users(id, username, name, email) VALUES ('" + USER + "','existing', 'Existing User', 'existing@example.invalid')");
         execute("INSERT INTO destinations(id,name,country_code,timezone,source) VALUES ('" + DESTINATION + "','Existing City','BR','America/Fortaleza','DEMO')");
         execute("INSERT INTO trips(id,user_id,destination_id,title,starts_on,ends_on) VALUES ('" + TRIP + "','" + USER + "','" + DESTINATION + "','Legacy trip',CURRENT_DATE,CURRENT_DATE)");
         execute("INSERT INTO itineraries(trip_id,title) VALUES ('" + TRIP + "','Legacy itinerary')");
