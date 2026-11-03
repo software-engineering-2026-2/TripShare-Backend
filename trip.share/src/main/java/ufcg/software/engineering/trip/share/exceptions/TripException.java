@@ -1,7 +1,13 @@
 package ufcg.software.engineering.trip.share.exceptions;
 
 public class TripException extends RuntimeException {
-    public enum Reason { INVALID_PERIOD, INVALID_DURATION, DESTINATION_NOT_FOUND }
+    public enum Reason {
+        INVALID_PERIOD,
+        INVALID_DURATION,
+        DESTINATION_NOT_FOUND,
+        TRIP_NOT_FOUND,
+        TRIP_FORBIDDEN
+    }
 
     private final Reason reason;
 
