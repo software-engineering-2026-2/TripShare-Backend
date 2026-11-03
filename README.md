@@ -155,6 +155,7 @@ senha nem emissão de token no backend.
 | `GET` | `/users/{id}` | Firebase ID token | Retorna informações públicas do perfil identificado por `id`. |
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
 | `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
+| `PATCH` | `/trips/{id}` | Firebase ID token | Atualiza campos da viagem do usuário autenticado (título, destino, datas ou duração). Retorna `200`. |
 
 ### Cadastro de perfil
 
@@ -314,6 +315,49 @@ Exemplo de resposta (`201`):
 Quando criada apenas com `durationDays`, os campos `startsOn` e `endsOn` retornam `null`. Datas invertidas (`endsOn < startsOn`), duração inválida/ausente ou datas incompletas retornam `400`; destino ou perfil do usuário inexistente retorna `404`; usuário suspenso retorna `403`.
 
 Na mesma transação, a API cria um registro vazio em `trip_days` para cada dia da viagem, numerado de `1` a `durationDays`. O dia `1` corresponde a `startsOn` e o último a `endsOn`; viagens criadas apenas com `durationDays` possuem os dias numerados, mas sem datas. A restrição `uq_trip_days_number` impede dias duplicados na mesma viagem. Esses dias ficam disponíveis para o gerenciamento de atividades por dia.
+
+### Edição de viagem
+
+O endpoint `PATCH /trips/{id}` permite ao proprietário atualizar parcialmente sua viagem: título, destino, datas ou duração em dias. Todos os campos são opcionais:
+
+```json
+{
+  "title": "Novo título da viagem",
+  "destinationId": "UUID de um destino cadastrado",
+  "startsOn": "2027-01-12",
+  "endsOn": "2027-01-18",
+  "durationDays": 7
+}
+```
+
+Regras e comportamentos:
+- **Propriedade da viagem:** Apenas o proprietário pode editar a viagem. Tentativas de outro usuário retornam `403` (`You do not own this trip`). Viagem inexistente retorna `404` (`Trip not found`).
+- **Destino:** Se informado, `destinationId` deve existir na tabela `destinations`; se inexistente, retorna `404` (`Destination not found`).
+- **Título:** Deve ter até 120 caracteres e conter ao menos um caractere visível (espaços nas bordas são removidos com `trim()`).
+- **Datas e Duração:**
+  - Quando datas são informadas, `endsOn` não pode ser anterior a `startsOn` (`400 End date cannot be before start date`).
+  - Se datas forem alteradas, a duração é recalculada automaticamente (`endsOn - startsOn + 1`). Se `durationDays` for enviado em conjunto com datas, deve ser compatível com o intervalo.
+  - Para viagens que já possuem datas, atualizar apenas `durationDays` ajusta a data final a partir do início existente.
+  - Para viagens sem datas fixas (criadas apenas com duração), atualizar `durationDays` atualiza a quantidade de dias da viagem diretamente. Se datas forem passadas para essa viagem, ambas (`startsOn` e `endsOn`) devem ser informadas.
+
+Exemplo de resposta (`200`):
+
+```json
+{
+  "id": "UUID interno da viagem",
+  "userId": "UUID interno do usuário proprietário",
+  "destinationId": "UUID do destino",
+  "destinationName": "Rio de Janeiro",
+  "destinationRegion": "Rio de Janeiro",
+  "destinationCountryCode": "BR",
+  "title": "Novo título da viagem",
+  "startsOn": "2027-01-12",
+  "endsOn": "2027-01-18",
+  "durationDays": 7,
+  "createdAt": "2026-10-28T12:00:00Z",
+  "updatedAt": "2026-10-28T12:30:00Z"
+}
+```
 
 Erros esperados retornam `{"status":400,"message":"Invalid request body"}`, com status e mensagem
 correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/expirado ou UID divergente,

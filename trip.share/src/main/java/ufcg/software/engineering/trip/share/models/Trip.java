@@ -86,6 +86,18 @@ public class Trip {
         return trip;
     }
 
+    public void update(String title, Destination destination, LocalDate startsOn, LocalDate endsOn, Integer durationDays) {
+        if (title != null) {
+            this.title = title.trim();
+        }
+        if (destination != null) {
+            this.destination = destination;
+        }
+        this.startsOn = startsOn;
+        this.endsOn = endsOn;
+        this.durationDays = durationDays;
+    }
+
     public int getDurationDays() {
         return durationDays != null ? durationDays : calculateDurationDays(startsOn, endsOn);
     }

@@ -29,6 +29,8 @@ public class ApiExceptionHandler {
             case INVALID_PERIOD -> error(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
             case INVALID_DURATION -> error(HttpStatus.BAD_REQUEST, "Trip must specify a valid date range or a positive duration in days");
             case DESTINATION_NOT_FOUND -> error(HttpStatus.NOT_FOUND, "Destination not found");
+            case TRIP_NOT_FOUND -> error(HttpStatus.NOT_FOUND, "Trip not found");
+            case TRIP_FORBIDDEN -> error(HttpStatus.FORBIDDEN, "You do not own this trip");
         };
     }
 

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -397,5 +398,251 @@ class TripApiTest {
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM trips", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM trip_days", Integer.class)).isZero();
+    }
+
+    @Test
+    void patchTrip_updatesTitle() throws Exception {
+        postTrip("""
+                {
+                  "title": "Título antigo",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-12"
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Título novo\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(tripId.toString()))
+                .andExpect(jsonPath("$.title").value("Título novo"))
+                .andExpect(jsonPath("$.durationDays").value(3));
+
+        String savedTitle = jdbc.queryForObject("SELECT title FROM trips WHERE id = ?", String.class, tripId);
+        assertThat(savedTitle).isEqualTo("Título novo");
+    }
+
+    @Test
+    void patchTrip_updatesDatesAndRecalculatesDuration() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem de 3 dias",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-12"
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "startsOn": "2026-11-10",
+                                  "endsOn": "2026-11-14"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startsOn").value("2026-11-10"))
+                .andExpect(jsonPath("$.endsOn").value("2026-11-14"))
+                .andExpect(jsonPath("$.durationDays").value(5));
+    }
+
+    @Test
+    void patchTrip_updatesDurationOnlyForDatedTrip_adjustsEndsOn() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem de 3 dias",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-12"
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationDays\":5}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startsOn").value("2026-11-10"))
+                .andExpect(jsonPath("$.endsOn").value("2026-11-14"))
+                .andExpect(jsonPath("$.durationDays").value(5));
+    }
+
+    @Test
+    void patchTrip_updatesDurationOnlyForUndatedTrip() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem sem datas",
+                  "destinationId": "%s",
+                  "durationDays": 4
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationDays\":7}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.startsOn").doesNotExist())
+                .andExpect(jsonPath("$.endsOn").doesNotExist())
+                .andExpect(jsonPath("$.durationDays").value(7));
+    }
+
+    @Test
+    void patchTrip_updatesDestination() throws Exception {
+        Destination destination2 = Destination.create(
+                "Rio de Janeiro",
+                "RJ",
+                "BR",
+                "America/Sao_Paulo",
+                "manual",
+                null
+        );
+        destinationRepository.save(destination2);
+
+        postTrip("""
+                {
+                  "title": "Viagem Inicial",
+                  "destinationId": "%s",
+                  "durationDays": 3
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destinationId\":\"%s\"}".formatted(destination2.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.destinationId").value(destination2.getId().toString()))
+                .andExpect(jsonPath("$.destinationName").value("Rio de Janeiro"));
+    }
+
+    @Test
+    void patchTrip_nonExistentDestination_returns404() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem",
+                  "destinationId": "%s",
+                  "durationDays": 3
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        UUID nonExistent = UUID.randomUUID();
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destinationId\":\"%s\"}".formatted(nonExistent)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Destination not found"));
+    }
+
+    @Test
+    void patchTrip_invalidPeriod_returns400() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem",
+                  "destinationId": "%s",
+                  "startsOn": "2026-11-10",
+                  "endsOn": "2026-11-12"
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "startsOn": "2026-11-15",
+                                  "endsOn": "2026-11-10"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("End date cannot be before start date"));
+    }
+
+    @Test
+    void patchTrip_nonExistentTrip_returns404() throws Exception {
+        mvc.perform(patch("/trips/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Viagem Fantasma\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Trip not found"));
+    }
+
+    @Test
+    void patchTrip_forbiddenWhenNotOwner_returns403() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem do Dono",
+                  "destinationId": "%s",
+                  "durationDays": 3
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        when(tokenService.validate("other-token"))
+                .thenReturn(new FirebaseIdentity("other-user-uid", "other@example.invalid"));
+        mvc.perform(post("/auth/register")
+                        .header("Authorization", "Bearer other-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"uuid":"other-user-uid","username":"otherguy","name":"Other Guy"}
+                                """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer other-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Tentando roubar viagem\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You do not own this trip"));
+    }
+
+    @Test
+    void patchTrip_blankTitle_returns400() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem",
+                  "destinationId": "%s",
+                  "durationDays": 3
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid request body"));
+    }
+
+    @Test
+    void patchTrip_withoutToken_returns401() throws Exception {
+        mvc.perform(patch("/trips/" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Sem token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Firebase Bearer token is required"));
     }
 }
