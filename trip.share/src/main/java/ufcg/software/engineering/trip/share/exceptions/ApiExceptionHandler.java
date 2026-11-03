@@ -34,6 +34,16 @@ public class ApiExceptionHandler {
         };
     }
 
+    @ExceptionHandler(TripPeriodConflictException.class)
+    public ResponseEntity<ufcg.software.engineering.trip.share.dto.PeriodConflictResponse> periodConflict(TripPeriodConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ufcg.software.engineering.trip.share.dto.PeriodConflictResponse(
+                        HttpStatus.CONFLICT.value(),
+                        exception.getMessage(),
+                        exception.getConflicts()
+                ));
+    }
+
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ErrorResponse> invalidRequest(Exception exception) {
         return error(HttpStatus.BAD_REQUEST, "Invalid request body");

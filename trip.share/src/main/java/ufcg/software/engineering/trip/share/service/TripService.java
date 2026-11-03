@@ -13,13 +13,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
+import ufcg.software.engineering.trip.share.dto.DayConflict;
 import ufcg.software.engineering.trip.share.dto.TripResponse;
 import ufcg.software.engineering.trip.share.dto.UpdateTripRequest;
 import ufcg.software.engineering.trip.share.exceptions.AuthException;
 import ufcg.software.engineering.trip.share.exceptions.TripException;
+import ufcg.software.engineering.trip.share.exceptions.TripPeriodConflictException;
 import ufcg.software.engineering.trip.share.models.Destination;
 import ufcg.software.engineering.trip.share.models.Trip;
 import ufcg.software.engineering.trip.share.models.TripDay;
@@ -36,15 +39,18 @@ public class TripService {
     private final TripDayRepository tripDayRepository;
     private final DestinationRepository destinationRepository;
     private final UserRepository userRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public TripService(TripRepository tripRepository,
                        TripDayRepository tripDayRepository,
                        DestinationRepository destinationRepository,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       JdbcTemplate jdbcTemplate) {
         this.tripRepository = tripRepository;
         this.tripDayRepository = tripDayRepository;
         this.destinationRepository = destinationRepository;
         this.userRepository = userRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
@@ -115,8 +121,66 @@ public class TripService {
         }
 
         ResolvedPeriod period = resolvePeriod(trip, request);
+        int oldDuration = trip.getDurationDays();
+        int newDuration = period.durationDays();
+
+        if (newDuration < oldDuration) {
+            validateAndHandleShortenedPeriod(trip.getId(), newDuration);
+        } else if (newDuration > oldDuration) {
+            expandTripDays(trip, oldDuration + 1, newDuration);
+        }
+
         trip.update(request.title(), destination, period.startsOn(), period.endsOn(), period.durationDays());
         return TripResponse.from(tripRepository.saveAndFlush(trip));
+    }
+
+    private void validateAndHandleShortenedPeriod(UUID tripId, int newDuration) {
+        if (!itineraryActivitiesTableExists()) {
+            tripDayRepository.deleteByTripIdAndDayNumberGreaterThan(tripId, newDuration);
+            return;
+        }
+
+        String sql = """
+                SELECT td.day_number, count(ia.id) AS activity_count
+                FROM trip_days td
+                JOIN itinerary_activities ia ON ia.trip_day_id = td.id
+                WHERE td.trip_id = ? AND td.day_number > ?
+                GROUP BY td.day_number
+                ORDER BY td.day_number ASC
+                """;
+
+        List<DayConflict> conflicts = jdbcTemplate.query(sql, (rs, rowNum) ->
+                new DayConflict(rs.getInt("day_number"), rs.getLong("activity_count")),
+                tripId, newDuration);
+
+        if (!conflicts.isEmpty()) {
+            throw new TripPeriodConflictException(conflicts);
+        }
+
+        // Empty days outside the new period can safely be removed
+        tripDayRepository.deleteByTripIdAndDayNumberGreaterThan(tripId, newDuration);
+    }
+
+    private boolean itineraryActivitiesTableExists() {
+        try {
+            var meta = jdbcTemplate.getDataSource().getConnection().getMetaData();
+            try (var rs = meta.getTables(null, null, "ITINERARY_ACTIVITIES", null)) {
+                if (rs.next()) return true;
+            }
+            try (var rs = meta.getTables(null, null, "itinerary_activities", null)) {
+                return rs.next();
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void expandTripDays(Trip trip, int fromDay, int toDay) {
+        List<TripDay> newDays = new ArrayList<>();
+        for (int dayNumber = fromDay; dayNumber <= toDay; dayNumber++) {
+            newDays.add(TripDay.create(trip, dayNumber));
+        }
+        tripDayRepository.saveAll(newDays);
     }
 
     private ResolvedPeriod resolvePeriod(Trip trip, UpdateTripRequest request) {

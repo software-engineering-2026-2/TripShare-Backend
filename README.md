@@ -339,6 +339,27 @@ Regras e comportamentos:
   - Se datas forem alteradas, a duração é recalculada automaticamente (`endsOn - startsOn + 1`). Se `durationDays` for enviado em conjunto com datas, deve ser compatível com o intervalo.
   - Para viagens que já possuem datas, atualizar apenas `durationDays` ajusta a data final a partir do início existente.
   - Para viagens sem datas fixas (criadas apenas com duração), atualizar `durationDays` atualiza a quantidade de dias da viagem diretamente. Se datas forem passadas para essa viagem, ambas (`startsOn` e `endsOn`) devem ser informadas.
+  - **Expansão de período:** Quando o período da viagem é expandido, o sistema cria automaticamente os novos dias vazios correspondentes em `trip_days`.
+  - **Redução de período e conflitos:** Ao reduzir o período da viagem, caso existam atividades salvas em dias que ficariam de fora do novo intervalo, a alteração é rejeitada com status `409 Conflict`, retornando os dias conflitantes e o total de atividades a serem realocadas ou removidas (`Cannot shorten trip: activities exist on days outside the new period`). Se os dias excedentes estiverem vazios (sem atividades), eles são removidos com segurança na mesma transação.
+
+Exemplo de resposta de conflito (`409`):
+
+```json
+{
+  "status": 409,
+  "message": "Cannot shorten trip: activities exist on days outside the new period",
+  "conflicts": [
+    {
+      "dayNumber": 4,
+      "activityCount": 2
+    },
+    {
+      "dayNumber": 5,
+      "activityCount": 1
+    }
+  ]
+}
+```
 
 Exemplo de resposta (`200`):
 

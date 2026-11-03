@@ -645,4 +645,138 @@ class TripApiTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Firebase Bearer token is required"));
     }
+
+    @Test
+    void patchTrip_shortenPeriod_withoutActivities_removesSurplusDays() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem de 5 dias",
+                  "destinationId": "%s",
+                  "durationDays": 5
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+        List<Integer> initialDays = jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId);
+        assertThat(initialDays).containsExactly(1, 2, 3, 4, 5);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationDays\":3}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationDays").value(3));
+
+        List<Integer> updatedDays = jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId);
+        assertThat(updatedDays).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void patchTrip_expandPeriod_createsNewEmptyDays() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem de 2 dias",
+                  "destinationId": "%s",
+                  "durationDays": 2
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationDays\":4}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationDays").value(4));
+
+        List<Integer> updatedDays = jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId);
+        assertThat(updatedDays).containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
+    void patchTrip_shortenPeriod_withActivitiesOnSurplusDays_returns409WithConflicts() throws Exception {
+        postTrip("""
+                {
+                  "title": "Viagem com Atividades",
+                  "destinationId": "%s",
+                  "durationDays": 5
+                }
+                """.formatted(destinationId)).andExpect(status().isCreated());
+
+        UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
+
+        // Find day 4 and day 5 IDs
+        UUID day4Id = jdbc.queryForObject(
+                "SELECT id FROM trip_days WHERE trip_id = ? AND day_number = 4", UUID.class, tripId);
+        UUID day5Id = jdbc.queryForObject(
+                "SELECT id FROM trip_days WHERE trip_id = ? AND day_number = 5", UUID.class, tripId);
+
+        // Ensure itineraries and itinerary_activities tables exist in H2 for this test
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS itineraries (
+                    id uuid PRIMARY KEY,
+                    trip_id uuid NOT NULL,
+                    title text NOT NULL
+                )
+                """);
+        jdbc.execute("""
+                CREATE TABLE IF NOT EXISTS itinerary_activities (
+                    id uuid PRIMARY KEY,
+                    itinerary_id uuid NOT NULL,
+                    trip_day_id uuid NOT NULL,
+                    name text NOT NULL,
+                    position integer
+                )
+                """);
+
+        // Create an itinerary for the trip
+        UUID itineraryId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO itineraries (id, trip_id, title)
+                VALUES (?, ?, 'Roteiro Principal')
+                """, itineraryId, tripId);
+
+        // Add 2 activities on day 4 and 1 activity on day 5
+        jdbc.update("""
+                INSERT INTO itinerary_activities (id, itinerary_id, trip_day_id, name, position)
+                VALUES (?, ?, ?, 'Atividade Dia 4 A', 1)
+                """, UUID.randomUUID(), itineraryId, day4Id);
+        jdbc.update("""
+                INSERT INTO itinerary_activities (id, itinerary_id, trip_day_id, name, position)
+                VALUES (?, ?, ?, 'Atividade Dia 4 B', 2)
+                """, UUID.randomUUID(), itineraryId, day4Id);
+        jdbc.update("""
+                INSERT INTO itinerary_activities (id, itinerary_id, trip_day_id, name, position)
+                VALUES (?, ?, ?, 'Atividade Dia 5', 1)
+                """, UUID.randomUUID(), itineraryId, day5Id);
+
+        // Attempt to shorten trip to 3 days
+        mvc.perform(patch("/trips/" + tripId)
+                        .header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationDays\":3}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Cannot shorten trip: activities exist on days outside the new period"))
+                .andExpect(jsonPath("$.conflicts").isArray())
+                .andExpect(jsonPath("$.conflicts[0].dayNumber").value(4))
+                .andExpect(jsonPath("$.conflicts[0].activityCount").value(2))
+                .andExpect(jsonPath("$.conflicts[1].dayNumber").value(5))
+                .andExpect(jsonPath("$.conflicts[1].activityCount").value(1));
+
+        // Ensure trip and all days were preserved
+        Integer duration = jdbc.queryForObject("SELECT duration_days FROM trips WHERE id = ?", Integer.class, tripId);
+        assertThat(duration).isEqualTo(5);
+        List<Integer> days = jdbc.queryForList(
+                "SELECT day_number FROM trip_days WHERE trip_id = ? ORDER BY day_number",
+                Integer.class, tripId);
+        assertThat(days).containsExactly(1, 2, 3, 4, 5);
+    }
 }
