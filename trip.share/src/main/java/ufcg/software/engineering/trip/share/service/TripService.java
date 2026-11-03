@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
@@ -39,18 +38,15 @@ public class TripService {
     private final TripDayRepository tripDayRepository;
     private final DestinationRepository destinationRepository;
     private final UserRepository userRepository;
-    private final JdbcTemplate jdbcTemplate;
 
     public TripService(TripRepository tripRepository,
                        TripDayRepository tripDayRepository,
                        DestinationRepository destinationRepository,
-                       UserRepository userRepository,
-                       JdbcTemplate jdbcTemplate) {
+                       UserRepository userRepository) {
         this.tripRepository = tripRepository;
         this.tripDayRepository = tripDayRepository;
         this.destinationRepository = destinationRepository;
         this.userRepository = userRepository;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
@@ -135,23 +131,10 @@ public class TripService {
     }
 
     private void validateAndHandleShortenedPeriod(UUID tripId, int newDuration) {
-        if (!itineraryActivitiesTableExists()) {
-            tripDayRepository.deleteByTripIdAndDayNumberGreaterThan(tripId, newDuration);
-            return;
-        }
-
-        String sql = """
-                SELECT td.day_number, count(ia.id) AS activity_count
-                FROM trip_days td
-                JOIN itinerary_activities ia ON ia.trip_day_id = td.id
-                WHERE td.trip_id = ? AND td.day_number > ?
-                GROUP BY td.day_number
-                ORDER BY td.day_number ASC
-                """;
-
-        List<DayConflict> conflicts = jdbcTemplate.query(sql, (rs, rowNum) ->
-                new DayConflict(rs.getInt("day_number"), rs.getLong("activity_count")),
-                tripId, newDuration);
+        List<DayConflict> conflicts = tripDayRepository.findActivityConflictsAfterDuration(tripId, newDuration)
+                .stream()
+                .map(conflict -> new DayConflict(conflict.getDayNumber(), conflict.getActivityCount()))
+                .toList();
 
         if (!conflicts.isEmpty()) {
             throw new TripPeriodConflictException(conflicts);
@@ -159,20 +142,6 @@ public class TripService {
 
         // Empty days outside the new period can safely be removed
         tripDayRepository.deleteByTripIdAndDayNumberGreaterThan(tripId, newDuration);
-    }
-
-    private boolean itineraryActivitiesTableExists() {
-        try {
-            var meta = jdbcTemplate.getDataSource().getConnection().getMetaData();
-            try (var rs = meta.getTables(null, null, "ITINERARY_ACTIVITIES", null)) {
-                if (rs.next()) return true;
-            }
-            try (var rs = meta.getTables(null, null, "itinerary_activities", null)) {
-                return rs.next();
-            }
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private void expandTripDays(Trip trip, int fromDay, int toDay) {
