@@ -23,6 +23,13 @@ public class ApiExceptionHandler {
         };
     }
 
+    @ExceptionHandler(ExternalPlaceException.class)
+    public ResponseEntity<ErrorResponse> externalPlace(ExternalPlaceException exception) {
+        return switch (exception.reason()) {
+            case SOURCE_UNAVAILABLE -> error(HttpStatus.SERVICE_UNAVAILABLE, "External place source unavailable");
+        };
+    }
+
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ErrorResponse> invalidRequest(Exception exception) {
         return error(HttpStatus.BAD_REQUEST, "Invalid request body");
