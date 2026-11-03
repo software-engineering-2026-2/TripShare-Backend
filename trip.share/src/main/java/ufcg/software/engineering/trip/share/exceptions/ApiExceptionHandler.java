@@ -30,6 +30,15 @@ public class ApiExceptionHandler {
         };
     }
 
+    @ExceptionHandler(TripException.class)
+    public ResponseEntity<ErrorResponse> trip(TripException exception) {
+        return switch (exception.reason()) {
+            case INVALID_PERIOD -> error(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
+            case INVALID_DURATION -> error(HttpStatus.BAD_REQUEST, "Trip must specify a valid date range or a positive duration in days");
+            case DESTINATION_NOT_FOUND -> error(HttpStatus.NOT_FOUND, "Destination not found");
+        };
+    }
+
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ErrorResponse> invalidRequest(Exception exception) {
         return error(HttpStatus.BAD_REQUEST, "Invalid request body");
