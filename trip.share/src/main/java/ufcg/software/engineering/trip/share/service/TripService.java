@@ -120,14 +120,19 @@ public class TripService {
         int oldDuration = trip.getDurationDays();
         int newDuration = period.durationDays();
 
+        // Shortening: surplus days must be removed before the trip is updated (trg_trips_period).
         if (newDuration < oldDuration) {
             validateAndHandleShortenedPeriod(trip.getId(), newDuration);
-        } else if (newDuration > oldDuration) {
-            expandTripDays(trip, oldDuration + 1, newDuration);
         }
 
         trip.update(request.title(), destination, period.startsOn(), period.endsOn(), period.durationDays());
-        return TripResponse.from(tripRepository.saveAndFlush(trip));
+        Trip saved = tripRepository.saveAndFlush(trip);
+
+        // Expanding: new days can only be inserted after the trip has the new duration (trg_trip_days_period).
+        if (newDuration > oldDuration) {
+            expandTripDays(saved, oldDuration + 1, newDuration);
+        }
+        return TripResponse.from(saved);
     }
 
     private void validateAndHandleShortenedPeriod(UUID tripId, int newDuration) {
