@@ -141,11 +141,27 @@ public class TripService {
                 throw new TripPeriodConflictException(conflicts);
             } else {
                 validateResolutions(conflicts, resolutions, newDuration);
+                applyResolutions(tripId, resolutions);
             }
         }
 
         // Empty days outside the new period can safely be removed
         tripDayRepository.deleteByTripIdAndDayNumberGreaterThan(tripId, newDuration);
+    }
+
+    private void applyResolutions(UUID tripId, List<DayResolution> resolutions) {
+        for (DayResolution resolution : resolutions) {
+            TripDay sourceDay = tripDayRepository.findByTripIdAndDayNumber(tripId, resolution.dayNumber())
+                    .orElseThrow(() -> new TripException(INVALID_DURATION));
+
+            if (resolution.action() == DayResolution.Action.MOVE) {
+                TripDay targetDay = tripDayRepository.findByTripIdAndDayNumber(tripId, resolution.targetDay())
+                        .orElseThrow(() -> new TripException(INVALID_DURATION));
+                tripDayRepository.moveActivities(sourceDay.getId(), targetDay.getId());
+            } else {
+                tripDayRepository.deleteActivitiesByDay(sourceDay.getId());
+            }
+        }
     }
 
     private void validateResolutions(List<DayConflict> conflicts, List<DayResolution> resolutions, int newDuration) {
