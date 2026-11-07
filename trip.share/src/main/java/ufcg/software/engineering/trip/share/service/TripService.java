@@ -117,7 +117,7 @@ public class TripService {
 
         // Shortening: surplus days must be removed before the trip is updated (trg_trips_period).
         if (newDuration < oldDuration) {
-            validateAndHandleShortenedPeriod(trip.getId(), newDuration);
+            validateAndHandleShortenedPeriod(trip.getId(), newDuration, request.resolutions());
         }
 
         trip.update(request.title(), destination, period.startsOn(), period.endsOn(), period.durationDays());
@@ -130,14 +130,18 @@ public class TripService {
         return TripResponse.from(saved);
     }
 
-    private void validateAndHandleShortenedPeriod(UUID tripId, int newDuration) {
+    private void validateAndHandleShortenedPeriod(UUID tripId, int newDuration, List<DayResolution> resolutions) {
         List<DayConflict> conflicts = tripDayRepository.findActivityConflictsAfterDuration(tripId, newDuration)
                 .stream()
                 .map(conflict -> new DayConflict(conflict.getDayNumber(), conflict.getActivityCount()))
                 .toList();
 
         if (!conflicts.isEmpty()) {
-            throw new TripPeriodConflictException(conflicts);
+            if(resolutions == null || resolutions.isEmpty()) {
+                throw new TripPeriodConflictException(conflicts);
+            } else {
+                validateResolutions(conflicts, resolutions, newDuration);
+            }
         }
 
         // Empty days outside the new period can safely be removed
