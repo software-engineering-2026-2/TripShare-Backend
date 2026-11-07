@@ -1,6 +1,7 @@
 package ufcg.software.engineering.trip.share.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,4 +33,24 @@ public interface TripDayRepository extends JpaRepository<TripDay, UUID> {
     @Modifying
     @Query("DELETE FROM TripDay td WHERE td.trip.id = :tripId AND td.dayNumber > :dayNumber")
     void deleteByTripIdAndDayNumberGreaterThan(@Param("tripId") UUID tripId, @Param("dayNumber") int dayNumber);
+
+    @Modifying
+    @Query(value = """
+        UPDATE itinerary_activities a
+        SET trip_day_id = :targetDayId,
+            position = a.position + COALESCE(
+                (SELECT MAX(b.position)
+                 FROM itinerary_activities b
+                 WHERE b.itinerary_id = a.itinerary_id
+                   AND b.trip_day_id = :targetDayId), 0)
+        WHERE a.trip_day_id = :sourceDayId
+        """, nativeQuery = true)
+    int moveActivities(@Param("sourceDayId") UUID sourceDayId,
+                       @Param("targetDayId") UUID targetDayId);
+
+    @Modifying
+    @Query(value = "DELETE FROM itinerary_activities WHERE trip_day_id = :dayId", nativeQuery = true)
+    int deleteActivitiesByDay(@Param("dayId") UUID dayId);
+
+    Optional<TripDay> findByTripIdAndDayNumber(UUID tripId, int dayNumber);
 }
