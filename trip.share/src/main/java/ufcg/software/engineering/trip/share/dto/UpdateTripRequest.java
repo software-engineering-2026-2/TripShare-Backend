@@ -1,9 +1,11 @@
 package ufcg.software.engineering.trip.share.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record UpdateTripRequest(
@@ -11,5 +13,6 @@ public record UpdateTripRequest(
         UUID destinationId,
         LocalDate startsOn,
         LocalDate endsOn,
-        @Positive Integer durationDays
+        @Positive Integer durationDays,
+        @Valid List<DayResolution> resolutions
 ) {}
