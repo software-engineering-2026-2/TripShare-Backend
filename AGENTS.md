@@ -118,3 +118,18 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Summarize the changes made.
 - Reference modified files using clear paths.
 - Suggest next steps only when they are useful.
+
+## Skills
+
+- At the start of every task, inspect the skills available in
+  `.agents/skills/`, relative to the repository root.
+- Review each skill's `name` and `description` to identify which skills
+  apply to the task and the project's stack.
+- Before performing work covered by a skill, read its full `SKILL.md`
+  and follow the applicable instructions.
+- Load referenced documents, scripts, and templates only when needed.
+- Briefly state which skills you are using and why.
+- If no skill applies, proceed using the repository's instructions.
+- Reassess applicable skills if the task's scope changes.
+- If a required skill is missing or unreadable, report the limitation
+  and do not claim to have followed it.
