@@ -15,7 +15,7 @@ O projeto é uma aplicação **Spring Boot 4.1.1** (Java 17) construída com **M
 
 ### Localmente
 
-Coloque o JSON da conta de serviço em `.secrets/firebase.json`, na raiz do repositório.
+Coloque o JSON da conta de serviço do Firebase em `.secrets/firebase.json` e a Service API Key da API de locais do Foursquare (texto puro) em `.secrets/foursquare.txt`, na raiz do repositório.
 O caminho local padrão considera a execução dentro de `trip.share/`:
 
 ```bash
@@ -35,9 +35,9 @@ evitando duas aplicações na porta 8080. Não ative esse perfil ao executar a a
 docker compose --profile app up --build
 ```
 
-A credencial é o JSON de uma conta de serviço do projeto Firebase usado pelo frontend.
-O arquivo é montado somente para leitura. A aplicação exige a credencial; os comandos de banco e
-os testes comuns não precisam dela. Nunca versione esse arquivo. `FIREBASE_KEY_PATH` configura a
+A credencial do Firebase é o JSON de uma conta de serviço do projeto usado pelo frontend; a do Foursquare é a Service API Key salva em `.secrets/foursquare.txt` (`FOURSQUARE_KEY_PATH`).
+Os arquivos em `.secrets/` são somente para leitura e nunca devem ser versionados. A aplicação exige a credencial do Firebase para iniciar e a do Foursquare ao consultar locais externos; os comandos de banco e
+os testes comuns não precisam delas. `FIREBASE_KEY_PATH` configura a
 JVM local; `FIREBASE_CREDENTIALS_FILE` configura o caminho no host para Docker. Ambas são opcionais
 quando o arquivo está em `.secrets/firebase.json` na raiz: localmente é usado o caminho padrão,
 e o Compose monta o arquivo em `/run/secrets/firebase.json` e informa esse caminho automaticamente.
@@ -154,6 +154,8 @@ senha nem emissão de token no backend.
 | `POST` | `/auth/login` | Firebase ID token | Busca o perfil existente associado ao UID Firebase. Retorna `200`. |
 | `GET` | `/users/{id}` | Firebase ID token | Retorna informações públicas do perfil identificado por `id`. |
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
+| `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
+| `PATCH` | `/trips/{id}` | Firebase ID token | Atualiza campos da viagem do usuário autenticado (título, destino, datas ou duração). Retorna `200`. |
 
 ### Cadastro de perfil
 
@@ -261,6 +263,120 @@ O endpoint retorna `200` com o perfil atualizado no mesmo formato da resposta de
   "status": "ACTIVE",
   "createdAt": "2026-10-24T12:00:00Z",
   "updatedAt": "2026-10-27T12:00:00Z"
+}
+```
+
+### Criação de viagem
+
+`POST /trips` cria uma viagem vinculada ao perfil associado à identidade do Firebase autenticada.
+
+Com intervalo de datas definido (`startsOn` e `endsOn` calculam `durationDays = endsOn - startsOn + 1`):
+
+```json
+{
+  "title": "Férias no Rio",
+  "destinationId": "UUID do destino cadastrado",
+  "startsOn": "2027-01-10",
+  "endsOn": "2027-01-14"
+}
+```
+
+Ou informando apenas a duração em dias (`durationDays > 0`, sem `startsOn` e `endsOn`):
+
+```json
+{
+  "title": "Roteiro de 5 dias no Rio",
+  "destinationId": "UUID do destino cadastrado",
+  "durationDays": 5
+}
+```
+
+`title` (não vazio; espaços nas extremidades são removidos com `trim()`) e `destinationId` (UUID existente em `destinations`) são obrigatórios. A viagem deve informar um intervalo válido (`startsOn` e `endsOn` com `endsOn >= startsOn`) ou uma duração positiva (`durationDays > 0`).
+
+Exemplo de resposta (`201`):
+
+```json
+{
+  "id": "UUID interno da viagem",
+  "userId": "UUID interno do usuário proprietário",
+  "destinationId": "UUID do destino",
+  "destinationName": "Rio de Janeiro",
+  "destinationRegion": "Rio de Janeiro",
+  "destinationCountryCode": "BR",
+  "title": "Férias no Rio",
+  "startsOn": "2027-01-10",
+  "endsOn": "2027-01-14",
+  "durationDays": 5,
+  "createdAt": "2026-10-28T12:00:00Z",
+  "updatedAt": "2026-10-28T12:00:00Z"
+}
+```
+
+Quando criada apenas com `durationDays`, os campos `startsOn` e `endsOn` retornam `null`. Datas invertidas (`endsOn < startsOn`), duração inválida/ausente ou datas incompletas retornam `400`; destino ou perfil do usuário inexistente retorna `404`; usuário suspenso retorna `403`.
+
+Na mesma transação, a API cria um registro vazio em `trip_days` para cada dia da viagem, numerado de `1` a `durationDays`. O dia `1` corresponde a `startsOn` e o último a `endsOn`; viagens criadas apenas com `durationDays` possuem os dias numerados, mas sem datas. A restrição `uq_trip_days_number` impede dias duplicados na mesma viagem. Esses dias ficam disponíveis para o gerenciamento de atividades por dia.
+
+### Edição de viagem
+
+O endpoint `PATCH /trips/{id}` permite ao proprietário atualizar parcialmente sua viagem: título, destino, datas ou duração em dias. Todos os campos são opcionais:
+
+```json
+{
+  "title": "Novo título da viagem",
+  "destinationId": "UUID de um destino cadastrado",
+  "startsOn": "2027-01-12",
+  "endsOn": "2027-01-18",
+  "durationDays": 7
+}
+```
+
+Regras e comportamentos:
+- **Propriedade da viagem:** Apenas o proprietário pode editar a viagem. Tentativas de outro usuário retornam `403` (`You do not own this trip`). Viagem inexistente retorna `404` (`Trip not found`).
+- **Destino:** Se informado, `destinationId` deve existir na tabela `destinations`; se inexistente, retorna `404` (`Destination not found`).
+- **Título:** Deve ter até 120 caracteres e conter ao menos um caractere visível (espaços nas bordas são removidos com `trim()`).
+- **Datas e Duração:**
+  - Quando datas são informadas, `endsOn` não pode ser anterior a `startsOn` (`400 End date cannot be before start date`).
+  - Se datas forem alteradas, a duração é recalculada automaticamente (`endsOn - startsOn + 1`). Se `durationDays` for enviado em conjunto com datas, deve ser compatível com o intervalo.
+  - Para viagens que já possuem datas, atualizar apenas `durationDays` ajusta a data final a partir do início existente.
+  - Para viagens sem datas fixas (criadas apenas com duração), atualizar `durationDays` atualiza a quantidade de dias da viagem diretamente. Se datas forem passadas para essa viagem, ambas (`startsOn` e `endsOn`) devem ser informadas.
+  - **Expansão de período:** Quando o período da viagem é expandido, o sistema cria automaticamente os novos dias vazios correspondentes em `trip_days`.
+  - **Redução de período e conflitos:** Ao reduzir o período da viagem, caso existam atividades salvas em dias que ficariam de fora do novo intervalo, a alteração é rejeitada com status `409 Conflict`, retornando os dias conflitantes e o total de atividades a serem realocadas ou removidas (`Cannot shorten trip: activities exist on days outside the new period`). Se os dias excedentes estiverem vazios (sem atividades), eles são removidos com segurança na mesma transação.
+
+Exemplo de resposta de conflito (`409`):
+
+```json
+{
+  "status": 409,
+  "message": "Cannot shorten trip: activities exist on days outside the new period",
+  "conflicts": [
+    {
+      "dayNumber": 4,
+      "activityCount": 2
+    },
+    {
+      "dayNumber": 5,
+      "activityCount": 1
+    }
+  ]
+}
+```
+
+Exemplo de resposta (`200`):
+
+```json
+{
+  "id": "UUID interno da viagem",
+  "userId": "UUID interno do usuário proprietário",
+  "destinationId": "UUID do destino",
+  "destinationName": "Rio de Janeiro",
+  "destinationRegion": "Rio de Janeiro",
+  "destinationCountryCode": "BR",
+  "title": "Novo título da viagem",
+  "startsOn": "2027-01-12",
+  "endsOn": "2027-01-18",
+  "durationDays": 7,
+  "createdAt": "2026-10-28T12:00:00Z",
+  "updatedAt": "2026-10-28T12:30:00Z"
 }
 ```
 

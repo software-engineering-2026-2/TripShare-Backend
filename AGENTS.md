@@ -84,6 +84,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Workflow
 
+<<<<<<< HEAD
 - Work on the current `US<N>` branch, where `N` is the user story number associated with the stage file.
 - Preserve existing changes made by the user.
 - Before editing, check whether the file already exists and whether relevant local conventions apply.
@@ -99,6 +100,15 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   report the discrepancy and clarify it when necessary.
 - Update affected documentation when an approved change alters the documented
   behavior.
+=======
+## Credenciais e Segredos
+
+- Todas as chaves de API e credenciais externas devem ficar armazenadas localmente no diretorio `.secrets/` na raiz do repositorio (ex.: `.secrets/firebase.json` para a conta de servico do Firebase e `.secrets/foursquare.txt` contendo a Service API Key pura do Foursquare).
+- Nunca versione arquivos de `.secrets/` nem inclua chaves reais hardcoded no codigo ou em arquivos de configuracao versionados.
+- Testes automatizados devem funcionar sem depender da presenca de arquivos reais em `.secrets/` (usando mocks/stubs).
+
+## Verificacao
+>>>>>>> e960d0254b6d3b7003cbd621815798f9a595c71e
 
 ### File Editing
 
