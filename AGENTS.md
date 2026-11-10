@@ -71,33 +71,50 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 
 ## Project Instructions
-## Idioma
 
-- Responda preferencialmente em portugues do Brasil.
-- Mantenha explicacoes objetivas, com passos claros quando houver uma tarefa pratica.
+### Language
 
-## Fluxo de trabalho
+- Respond and write project documentation in Brazilian Portuguese.
+- Keep explanations concise, with clear steps for practical tasks.
+- Preserve the names of commands, APIs, files, and technical identifiers.
+- Follow existing conventions for naming and code comments.
+- Keep third-party skills in their original language.
 
-- considere a branch atual US<N> em que N é o número da US referente ao arquivo da Etapa.
-- Preserve mudancas existentes feitas pelo usuario.
-- Antes de editar, verifique se o arquivo ja existe e se ha convencoes locais relevantes.
-- Prefira mudancas pequenas, diretas e alinhadas ao padrao do projeto.
 
-## Edicao de arquivos
 
-- Use nomes de arquivos e diretorios claros em Inglês.
-- Evite refatoracoes fora do escopo solicitado.
-- Nao remova codigo, arquivos ou configuracoes sem necessidade clara.
-- Inclua comentarios apenas quando ajudarem a entender uma decisao nao obvia.
+### Workflow
 
-## Verificacao
+- Work on the current `US<N>` branch, where `N` is the user story number associated with the stage file.
+- Preserve existing changes made by the user.
+- Before editing, check whether the file already exists and whether relevant local conventions apply.
+- Prefer small, straightforward changes consistent with the project's conventions.
+- At the start of every task, check the repository's `docs/` directory.
+- Read `docs/README.md`, when available, to identify relevant documentation.
+- Before planning or editing files, read the documents relevant to the task,
+  including applicable requirements, business rules, and architectural decisions.
+- Follow links to additional documents when needed to understand the task.
+- Treat proposals and open questions as unconfirmed; do not assume they are
+  approved requirements.
+- If documentation conflicts with the implementation or the user's request,
+  report the discrepancy and clarify it when necessary.
+- Update affected documentation when an approved change alters the documented
+  behavior.
 
-- Quando houver codigo, execute testes, lint ou comandos de validacao disponiveis.
-- Se nao for possivel validar automaticamente, explique o que foi verificado manualmente.
-- Informe qualquer limitacao encontrada durante a execucao.
+### File Editing
 
-## Entrega
+- Use clear English names for new files and directories.
+- Avoid refactoring outside the requested scope.
+- Do not remove code, files, or configuration without a clear need.
+- Add comments only when they help explain a non-obvious decision.
 
-- Resuma as alteracoes feitas.
-- Cite arquivos alterados usando caminhos claros.
-- Sugira proximos passos apenas quando forem realmente uteis.
+### Verification
+
+- When changing code, run the available tests, lint checks, or validation commands relevant to the changes.
+- If automated validation is not possible, explain what was checked manually.
+- Report any limitations encountered during execution.
+
+### Delivery
+
+- Summarize the changes made.
+- Reference modified files using clear paths.
+- Suggest next steps only when they are useful.
