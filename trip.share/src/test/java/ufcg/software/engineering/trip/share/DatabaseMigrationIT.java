@@ -119,7 +119,7 @@ class DatabaseMigrationIT {
 
     @Test
     void migrate_emptyDatabase_shouldCreateSchemaAndOnlyReferenceData() throws SQLException {
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(7);
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(8);
         assertThat(count("SELECT count(*) FROM categories")).isEqualTo(7);
         assertThat(count("SELECT count(*) FROM travel_paces")).isEqualTo(3);
         assertThat(count("SELECT count(*) FROM transport_modes")).isEqualTo(4);
@@ -127,7 +127,7 @@ class DatabaseMigrationIT {
         assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"))
             .isEqualTo(27); // 26 domain tables plus Flyway history.
         assertThat(flyway().migrate().migrationsExecuted).isZero();
-        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
+        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(8);
     }
 
     @Test
@@ -138,14 +138,14 @@ class DatabaseMigrationIT {
         execute("INSERT INTO destinations(id,name,country_code,timezone,source) VALUES ('" + DESTINATION + "','Existing City','BR','America/Fortaleza','DEMO')");
         execute("INSERT INTO trips(id,user_id,destination_id,title,starts_on,ends_on) VALUES ('" + TRIP + "','" + USER + "','" + DESTINATION + "','Legacy trip',CURRENT_DATE,CURRENT_DATE)");
         execute("INSERT INTO itineraries(trip_id,title) VALUES ('" + TRIP + "','Legacy itinerary')");
-        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(flyway().migrate().migrationsExecuted).isEqualTo(2);
         assertThat(count("SELECT count(*) FROM users")).isZero();
         assertThat(count("SELECT count(*) FROM trips")).isZero();
         assertThat(count("SELECT count(*) FROM itineraries")).isZero();
         assertThat(count("SELECT count(*) FROM auth")).isZero();
         assertThat(count("SELECT count(*) FROM destinations")).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM categories")).isEqualTo(7);
-        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
+        assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(8);
         assertThat(count("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('user_sessions','password_reset_tokens')")).isZero();
         assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'password_hash'")).isZero();
     }
@@ -156,8 +156,8 @@ class DatabaseMigrationIT {
         try {
             List<Callable<Integer>> tasks = List.of(() -> flyway().migrate().migrationsExecuted, () -> flyway().migrate().migrationsExecuted);
             var results = executor.invokeAll(tasks);
-            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(7);
-            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(7);
+            assertThat(results.get(0).get() + results.get(1).get()).isEqualTo(8);
+            assertThat(count("SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(8);
         } finally {
             executor.shutdownNow();
         }
