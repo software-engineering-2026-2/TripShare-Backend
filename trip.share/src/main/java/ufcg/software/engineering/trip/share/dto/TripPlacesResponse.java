@@ -4,14 +4,14 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 
 public record TripPlacesResponse(
-        List<PlaceCardResponse> content,
+        List<PlaceResponse> content,
         int page,
         int size,
         long totalElements,
         int totalPages,
         boolean last) {
 
-    public static TripPlacesResponse from(Page<PlaceCardResponse> places) {
+    public static TripPlacesResponse from(Page<PlaceResponse> places) {
         return new TripPlacesResponse(
                 places.getContent(),
                 places.getNumber(),

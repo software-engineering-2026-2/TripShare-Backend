@@ -21,6 +21,7 @@ import ufcg.software.engineering.trip.share.exceptions.AuthException;
 import ufcg.software.engineering.trip.share.exceptions.TripException;
 import ufcg.software.engineering.trip.share.exceptions.TripPeriodConflictException;
 import ufcg.software.engineering.trip.share.models.Destination;
+import ufcg.software.engineering.trip.share.models.Place;
 import ufcg.software.engineering.trip.share.models.Trip;
 import ufcg.software.engineering.trip.share.models.TripDay;
 import ufcg.software.engineering.trip.share.models.User;
@@ -273,13 +274,13 @@ public class TripService {
             throw new TripException(INVALID_PAGINATION);
         }
 
-        Page<PlaceRepository.PlaceCard> places = placeRepository.findCardsByDestinationIdAndRemovedAtIsNullOrderByNameAscIdAsc(
+        Page<Place> places = placeRepository.findByDestinationIdAndRemovedAtIsNullOrderByNameAscIdAsc(
                 trip.getDestination().getId(), PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
-        return TripPlacesResponse.from(places.map(TripService::toPlaceCard));
+        return TripPlacesResponse.from(places.map(TripService::toPlaceResponse));
     }
 
-    private static PlaceCardResponse toPlaceCard(PlaceRepository.PlaceCard place) {
-        return new PlaceCardResponse(
+    private static PlaceResponse toPlaceResponse(Place place) {
+        return new PlaceResponse(
                 place.getId(),
                 place.getName(),
                 place.getAddress(),
