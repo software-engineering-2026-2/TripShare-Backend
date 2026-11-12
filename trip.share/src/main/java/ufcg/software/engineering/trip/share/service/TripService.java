@@ -4,6 +4,7 @@ import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reas
 import static ufcg.software.engineering.trip.share.exceptions.AuthException.Reason.USER_SUSPENDED;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.DESTINATION_NOT_FOUND;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_DURATION;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PAGINATION;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PERIOD;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.TRIP_FORBIDDEN;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.TRIP_NOT_FOUND;
@@ -11,6 +12,8 @@ import static ufcg.software.engineering.trip.share.exceptions.TripException.Reas
 import java.time.LocalDate;
 import java.util.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.*;
@@ -18,30 +21,37 @@ import ufcg.software.engineering.trip.share.exceptions.AuthException;
 import ufcg.software.engineering.trip.share.exceptions.TripException;
 import ufcg.software.engineering.trip.share.exceptions.TripPeriodConflictException;
 import ufcg.software.engineering.trip.share.models.Destination;
+import ufcg.software.engineering.trip.share.models.Place;
 import ufcg.software.engineering.trip.share.models.Trip;
 import ufcg.software.engineering.trip.share.models.TripDay;
 import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.models.UserStatus;
 import ufcg.software.engineering.trip.share.repository.DestinationRepository;
+import ufcg.software.engineering.trip.share.repository.PlaceRepository;
 import ufcg.software.engineering.trip.share.repository.TripDayRepository;
 import ufcg.software.engineering.trip.share.repository.TripRepository;
 import ufcg.software.engineering.trip.share.repository.UserRepository;
 
 @Service
 public class TripService {
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final TripRepository tripRepository;
     private final TripDayRepository tripDayRepository;
     private final DestinationRepository destinationRepository;
     private final UserRepository userRepository;
+    private final PlaceRepository placeRepository;
 
     public TripService(TripRepository tripRepository,
                        TripDayRepository tripDayRepository,
                        DestinationRepository destinationRepository,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       PlaceRepository placeRepository) {
         this.tripRepository = tripRepository;
         this.tripDayRepository = tripDayRepository;
         this.destinationRepository = destinationRepository;
         this.userRepository = userRepository;
+        this.placeRepository = placeRepository;
     }
 
     @Transactional
@@ -243,6 +253,44 @@ public class TripService {
 
         // Dates and duration untouched
         return new ResolvedPeriod(trip.getStartsOn(), trip.getEndsOn(), trip.getDurationDays());
+    }
+
+    @Transactional(readOnly = true)
+    public TripPlacesResponse getPlacesTrip(UUID tripId, FirebaseIdentity identity, int page, int size) {
+        User user = userRepository.findByAuthUuid(identity.uid())
+                .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new AuthException(USER_SUSPENDED);
+        }
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new TripException(TRIP_NOT_FOUND));
+
+        if (!trip.getUser().getId().equals(user.getId())) {
+            throw new TripException(TRIP_FORBIDDEN);
+        }
+
+        if (page < 0 || size < 1) {
+            throw new TripException(INVALID_PAGINATION);
+        }
+
+        Page<Place> places = placeRepository.findByDestinationIdAndRemovedAtIsNullOrderByNameAscIdAsc(
+                trip.getDestination().getId(), PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE)));
+        return TripPlacesResponse.from(places.map(TripService::toPlaceResponse));
+    }
+
+    private static PlaceResponse toPlaceResponse(Place place) {
+        return new PlaceResponse(
+                place.getId(),
+                place.getName(),
+                place.getAddress(),
+                place.getNeighborhood(),
+                place.getDescription(),
+                place.getLatitude(),
+                place.getLongitude(),
+                place.getEstimatedVisitMinutes(),
+                place.getEstimatedCost(),
+                place.getCurrency());
     }
 
     private record ResolvedPeriod(LocalDate startsOn, LocalDate endsOn, int durationDays) {}

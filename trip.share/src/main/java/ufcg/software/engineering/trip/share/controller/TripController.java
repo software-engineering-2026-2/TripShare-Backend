@@ -5,15 +5,10 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
 import ufcg.software.engineering.trip.share.dto.TripResponse;
+import ufcg.software.engineering.trip.share.dto.TripPlacesResponse;
 import ufcg.software.engineering.trip.share.dto.UpdateTripRequest;
 import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 import ufcg.software.engineering.trip.share.service.TripService;
@@ -39,5 +34,16 @@ public class TripController {
                                    @AuthenticationPrincipal FirebaseIdentity identity,
                                    @Valid @RequestBody UpdateTripRequest request) {
         return tripService.updateTrip(id, request, identity);
+    }
+
+    @GetMapping("{id}/places")
+    @ResponseStatus(HttpStatus.OK)
+    public TripPlacesResponse getTripPlaces(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal FirebaseIdentity identity
+    ) {
+        return tripService.getPlacesTrip(id, identity, page, size);
     }
 }

@@ -156,6 +156,7 @@ senha nem emissão de token no backend.
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
 | `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
 | `PATCH` | `/trips/{id}` | Firebase ID token | Atualiza campos da viagem do usuário autenticado (título, destino, datas ou duração). Retorna `200`. |
+| `GET` | `/trips/{id}/places` | Firebase ID token | Lista, paginadamente, lugares ativos do destino da viagem do usuário autenticado. Retorna `200`. |
 
 ### Cadastro de perfil
 
@@ -379,6 +380,44 @@ Exemplo de resposta (`200`):
   "updatedAt": "2026-10-28T12:30:00Z"
 }
 ```
+
+### Consulta de lugares do destino da viagem
+
+`GET /trips/{id}/places` retorna lugares ativos cadastrados para o destino associado à viagem. A chamada
+exige token Firebase válido e só pode ser feita pelo proprietário da viagem, com usuário ativo.
+
+Parâmetros opcionais de query: `page` (índice começando em zero, padrão `0`) e `size` (padrão `20`,
+limitado a `100`). A ordenação é por nome e identificador. Índice negativo ou tamanho menor que `1`
+retorna `400`; páginas sem resultados retornam `200` com conteúdo vazio.
+
+Exemplo: `GET /trips/{id}/places?page=0&size=20`
+
+```json
+{
+  "content": [
+    {
+      "id": "UUID do lugar",
+      "name": "Museu de Arte",
+      "address": "Rua Exemplo, 100",
+      "neighborhood": "Centro",
+      "description": "Museu municipal",
+      "latitude": -22.9068,
+      "longitude": -43.1729,
+      "estimatedVisitMinutes": 90,
+      "estimatedCost": 25.00,
+      "currency": "BRL"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1,
+  "last": true
+}
+```
+
+Campos opcionais do lugar podem retornar `null`. Uma viagem inexistente retorna `404`, uma viagem de
+outro usuário ou de um usuário suspenso retorna `403`, e parâmetros de paginação inválidos retornam `400`.
 
 Erros esperados retornam `{"status":400,"message":"Invalid request body"}`, com status e mensagem
 correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/expirado ou UID divergente,
