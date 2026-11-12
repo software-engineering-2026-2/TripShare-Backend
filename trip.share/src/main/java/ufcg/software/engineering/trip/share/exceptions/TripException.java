@@ -4,6 +4,7 @@ public class TripException extends RuntimeException {
     public enum Reason {
         INVALID_PERIOD,
         INVALID_DURATION,
+        INVALID_PAGINATION,
         DESTINATION_NOT_FOUND,
         TRIP_NOT_FOUND,
         TRIP_FORBIDDEN

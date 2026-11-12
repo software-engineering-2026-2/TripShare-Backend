@@ -8,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
 import ufcg.software.engineering.trip.share.dto.TripResponse;
+import ufcg.software.engineering.trip.share.dto.TripPlacesResponse;
 import ufcg.software.engineering.trip.share.dto.UpdateTripRequest;
 import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
 import ufcg.software.engineering.trip.share.service.TripService;
@@ -39,8 +40,10 @@ public class TripController {
     @ResponseStatus(HttpStatus.OK)
     public TripPlacesResponse getTripPlaces(
             @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal FirebaseIdentity identity
     ) {
-        return tripService.getPlacesTrip(id, identity);
+        return tripService.getPlacesTrip(id, identity, page, size);
     }
 }
