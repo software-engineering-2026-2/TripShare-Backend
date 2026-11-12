@@ -245,5 +245,24 @@ public class TripService {
         return new ResolvedPeriod(trip.getStartsOn(), trip.getEndsOn(), trip.getDurationDays());
     }
 
+    public TripPlacesResponse getPlacesTrip(UUID id, FirebaseIdentity identity) {
+        User user = userRepository.findByAuthUuid(identity.uid())
+                .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new AuthException(USER_SUSPENDED);
+        }
+
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new TripException(TRIP_NOT_FOUND));
+
+        if (!trip.getUser().getId().equals(user.getId())) {
+            throw new TripException(TRIP_FORBIDDEN);
+        }
+
+        // TODO
+
+        return null;
+    }
+
     private record ResolvedPeriod(LocalDate startsOn, LocalDate endsOn, int durationDays) {}
 }
