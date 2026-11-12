@@ -33,6 +33,10 @@ public class ApiExceptionHandler {
     @ExceptionHandler(TripException.class)
     public ResponseEntity<ErrorResponse> trip(TripException exception) {
         return switch (exception.reason()) {
+            case INVALID_PAGINATION -> error(HttpStatus.BAD_REQUEST, "Invalid pagination parameters");
+            case INVALID_RESOLUTIONS -> error(HttpStatus.BAD_REQUEST, "Invalid day resolutions");
+            case CONFIRMATION_REQUIRED -> error(HttpStatus.BAD_REQUEST, "Trip deletion requires explicit confirmation");
+            case PUBLIC_ACTIVITY_REQUIRED -> error(HttpStatus.CONFLICT, "A public itinerary needs an activity with an identified location");
             case INVALID_PERIOD -> error(HttpStatus.BAD_REQUEST, "End date cannot be before start date");
             case INVALID_DURATION -> error(HttpStatus.BAD_REQUEST, "Trip must specify a valid date range or a positive duration in days");
             case DESTINATION_NOT_FOUND -> error(HttpStatus.NOT_FOUND, "Destination not found");

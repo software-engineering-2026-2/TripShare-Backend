@@ -7,11 +7,17 @@ import static ufcg.software.engineering.trip.share.exceptions.TripException.Reas
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PERIOD;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.TRIP_FORBIDDEN;
 import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.TRIP_NOT_FOUND;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.CONFIRMATION_REQUIRED;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_PAGINATION;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.INVALID_RESOLUTIONS;
+import static ufcg.software.engineering.trip.share.exceptions.TripException.Reason.PUBLIC_ACTIVITY_REQUIRED;
 
 import java.time.LocalDate;
 import java.util.*;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import ufcg.software.engineering.trip.share.dto.*;
 import ufcg.software.engineering.trip.share.exceptions.AuthException;
@@ -90,8 +96,32 @@ public class TripService {
         }
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public TripDeletePreview previewDeletion(UUID tripId, FirebaseIdentity identity, int page, int size) {
+        ownedTrip(tripId, identity);
+        if (page < 0 || size < 1) {
+            throw new TripException(INVALID_PAGINATION);
+        }
+        int pageSize = Math.min(size, 100);
+        long offset = (long) page * pageSize;
+        long total = tripRepository.countItineraries(tripId);
+        List<TripDeletePreview.ItineraryImpact> content = offset < total
+                ? tripRepository.findDeletionImpact(tripId, pageSize, offset)
+                : List.of();
+        return new TripDeletePreview(content, page, pageSize, total, (total + pageSize - 1) / pageSize,
+                offset + pageSize >= total);
+    }
+
     @Transactional
-    public TripResponse updateTrip(UUID tripId, UpdateTripRequest request, FirebaseIdentity identity) {
+    public void deleteTrip(UUID tripId, FirebaseIdentity identity, boolean confirmed) {
+        Trip trip = ownedTrip(tripId, identity);
+        if (!confirmed) {
+            throw new TripException(CONFIRMATION_REQUIRED);
+        }
+        tripRepository.delete(trip);
+    }
+
+    private Trip ownedTrip(UUID tripId, FirebaseIdentity identity) {
         User user = userRepository.findByAuthUuid(identity.uid())
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
         if (user.getStatus() == UserStatus.SUSPENDED) {
@@ -104,6 +134,12 @@ public class TripService {
         if (!trip.getUser().getId().equals(user.getId())) {
             throw new TripException(TRIP_FORBIDDEN);
         }
+        return trip;
+    }
+
+    @Transactional
+    public TripResponse updateTrip(UUID tripId, UpdateTripRequest request, FirebaseIdentity identity) {
+        Trip trip = ownedTrip(tripId, identity);
 
         Destination destination = null;
         if (request.destinationId() != null) {
@@ -118,6 +154,8 @@ public class TripService {
         // Shortening: surplus days must be removed before the trip is updated (trg_trips_period).
         if (newDuration < oldDuration) {
             validateAndHandleShortenedPeriod(trip.getId(), newDuration, request.resolutions());
+        } else if (request.resolutions() != null && !request.resolutions().isEmpty()) {
+            throw new TripException(INVALID_RESOLUTIONS);
         }
 
         trip.update(request.title(), destination, period.startsOn(), period.endsOn(), period.durationDays());
@@ -136,13 +174,13 @@ public class TripService {
                 .map(conflict -> new DayConflict(conflict.getDayNumber(), conflict.getActivityCount()))
                 .toList();
 
-        if (!conflicts.isEmpty()) {
-            if(resolutions == null || resolutions.isEmpty()) {
+        if (resolutions == null || resolutions.isEmpty()) {
+            if (!conflicts.isEmpty()) {
                 throw new TripPeriodConflictException(conflicts);
-            } else {
-                validateResolutions(conflicts, resolutions, newDuration);
-                applyResolutions(tripId, resolutions);
             }
+        } else {
+            validateResolutions(conflicts, resolutions, newDuration);
+            applyResolutions(tripId, resolutions);
         }
 
         // Empty days outside the new period can safely be removed
@@ -150,6 +188,7 @@ public class TripService {
     }
 
     private void applyResolutions(UUID tripId, List<DayResolution> resolutions) {
+        boolean removedActivities = false;
         for (DayResolution resolution : resolutions) {
             TripDay sourceDay = tripDayRepository.findByTripIdAndDayNumber(tripId, resolution.dayNumber())
                     .orElseThrow(() -> new TripException(INVALID_DURATION));
@@ -160,32 +199,37 @@ public class TripService {
                 tripDayRepository.moveActivities(sourceDay.getId(), targetDay.getId());
             } else {
                 tripDayRepository.deleteActivitiesByDay(sourceDay.getId());
+                removedActivities = true;
+            }
+        }
+        if (removedActivities) {
+            // Check the deferred publication rule here so the client can resolve a conflict before commit.
+            try {
+                tripDayRepository.checkPublicActivityConstraint();
+            } catch (DataIntegrityViolationException exception) {
+                throw new TripException(PUBLIC_ACTIVITY_REQUIRED);
             }
         }
     }
 
     private void validateResolutions(List<DayConflict> conflicts, List<DayResolution> resolutions, int newDuration) {
-        Set<Integer> resolvedDays = new HashSet<>();
-
+        Set<Integer> remaining = new HashSet<>();
+        conflicts.forEach(conflict -> remaining.add(conflict.dayNumber()));
         for (DayResolution resolution : resolutions) {
-            if(!resolvedDays.add(resolution.dayNumber())) {
-                throw new TripException(INVALID_DURATION);
+            if (!remaining.remove(resolution.dayNumber())) {
+                throw new TripException(INVALID_RESOLUTIONS);
             }
-            if(resolution.action() == DayResolution.Action.MOVE) {
-                if(resolution.targetDay() == null || resolution.targetDay() < 1 || resolution.targetDay() > newDuration) {
-                    throw new TripException(INVALID_DURATION);
+            Integer target = resolution.targetDay();
+            if (resolution.action() == DayResolution.Action.MOVE) {
+                if (target == null || target < 1 || target > newDuration) {
+                    throw new TripException(INVALID_RESOLUTIONS);
                 }
+            } else if (target != null) {
+                throw new TripException(INVALID_RESOLUTIONS);
             }
         }
-
-        for (DayConflict conflict : conflicts) {
-            if(!resolvedDays.contains(conflict.dayNumber())) {
-                throw new TripException(INVALID_DURATION);
-            }
-        }
-
-        if(resolvedDays.size() != conflicts.size()) {
-            throw new TripException(INVALID_DURATION);
+        if (!remaining.isEmpty()) {
+            throw new TripException(INVALID_RESOLUTIONS);
         }
     }
 

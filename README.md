@@ -156,6 +156,8 @@ senha nem emissão de token no backend.
 | `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
 | `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
 | `PATCH` | `/trips/{id}` | Firebase ID token | Atualiza campos da viagem do usuário autenticado (título, destino, datas ou duração). Retorna `200`. |
+| `GET` | `/trips/{id}/delete-preview` | Firebase ID token | Lista os roteiros e vínculos que a exclusão afetará, com paginação. |
+| `DELETE` | `/trips/{id}?confirm=true` | Firebase ID token | Exclui a viagem inteira após confirmação. Retorna `204`. |
 
 ### Cadastro de perfil
 
@@ -361,6 +363,22 @@ Exemplo de resposta de conflito (`409`):
 }
 ```
 
+Para resolver os dois conflitos do exemplo, reenvie o `PATCH` com o período desejado e uma ação por dia.
+
+```json
+{
+  "durationDays": 3,
+  "resolutions": [
+    {"dayNumber": 4, "action": "MOVE", "targetDay": 2},
+    {"dayNumber": 5, "action": "REMOVE"}
+  ]
+}
+```
+
+`MOVE` acrescenta as atividades ao dia escolhido, após as já planejadas em cada roteiro.
+`REMOVE` exclui as atividades do dia. Se o roteiro público perder sua última atividade com local
+identificado, a API retorna `409` e desfaz a edição inteira. Resoluções inválidas retornam `400`.
+
 Exemplo de resposta (`200`):
 
 ```json
@@ -379,6 +397,21 @@ Exemplo de resposta (`200`):
   "updatedAt": "2026-10-28T12:30:00Z"
 }
 ```
+
+### Prévia e exclusão de viagem
+
+`GET /trips/{id}/delete-preview?page=0&size=20` lista os roteiros do proprietário por título,
+com desempate pelo UUID. Cada item em `content` informa `id`, `title`, `published`, `favoriteCount`
+e `inRanking`. Um roteiro público oculto por moderação pode ter `published: true` e `inRanking: false`.
+
+A resposta inclui `page`, `size`, `totalElements`, `totalPages` e `last`. A primeira página é zero
+e o tamanho padrão é 20. Tamanhos acima de 100 são ajustados para 100. Página negativa ou tamanho
+menor que 1 retorna `400`. Páginas além da última retornam `200` com `content: []` e os totais da viagem.
+
+Para cancelar, feche a prévia. Para confirmar, envie `DELETE /trips/{id}?confirm=true`.
+A resposta `204` indica que a viagem inteira, os roteiros de todas as páginas e seus vínculos foram
+removidos na mesma transação. Confirmação ausente ou inválida retorna `400` e preserva os dados.
+Consulte os exemplos de requisições e respostas no [contrato OpenAPI da RF-06](docs/openapi.yaml).
 
 Erros esperados retornam `{"status":400,"message":"Invalid request body"}`, com status e mensagem
 correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/expirado ou UID divergente,
