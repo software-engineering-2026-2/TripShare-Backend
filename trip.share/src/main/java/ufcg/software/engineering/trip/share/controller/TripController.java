@@ -15,10 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
-import ufcg.software.engineering.trip.share.dto.TripDeletePreview;
-import ufcg.software.engineering.trip.share.dto.TripResponse;
-import ufcg.software.engineering.trip.share.dto.UpdateTripRequest;
+import ufcg.software.engineering.trip.share.dto.*;
 import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.TripService;
 
@@ -58,5 +55,16 @@ public class TripController {
     public void deleteTrip(@PathVariable UUID id, @RequestParam(required = false) String confirm,
                            @AuthenticationPrincipal AuthenticatedUser identity) {
         tripService.deleteTrip(id, identity, "true".equals(confirm));
+    }
+
+    @GetMapping("{id}/places")
+    @ResponseStatus(HttpStatus.OK)
+    public TripPlacesResponse getTripPlaces(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal AuthenticatedUser identity
+    ) {
+        return tripService.getPlacesTrip(id, identity, page, size);
     }
 }
