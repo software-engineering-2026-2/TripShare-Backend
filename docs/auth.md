@@ -1,347 +1,89 @@
-# TripShare database
+# TripShare Authentication
 
-Modelo PostgreSQL 16 baseado nas convenções e fichas RF-01 a RF-32 do
-[documento de requisitos](https://docs.google.com/document/d/1euLvqRRyR7TEQDtwJ5GcOq_YJUydZM2jZKGy_xOtSy8/edit?tab=t.0).
-As fichas detalhadas prevalecem sobre as tabelas de resumo divergentes.
+O TripShare usa o Firebase Authentication para autenticar o usuário e o Spring Security para validar sua identidade a cada requisição. Para concluir o login no TripShare, o usuário precisa ter uma conta no Firebase e um perfil cadastrado no PostgreSQL.
+O Firebase gerencia as credenciais de acesso e atribui a cada conta um identificador chamado UID. No PostgreSQL, a tabela users armazena o perfil do usuário, incluindo o e-mail. O campo users.auth_id referencia auth.id, e o campo auth.uuid armazena o UID do Firebase.
 
-Esta entrega implementa a persistência e suas garantias estruturais, as entidades JPA `Auth` e `User`,
-cadastro de perfil e login autenticados por ID token Firebase. Publicação, geração de roteiros e
-fluxos administrativos continuam fora dessa implementação. O fluxo Firebase substitui as regras
-anteriores de senha e sessão local dos RF-01–RF-03.
+## Fluxo de login
 
-## Executar
+1. O usuário entra pelo frontend. Ele informa e-mail e senha, e o frontend usa o Firebase Authentication para autenticar a conta. Após o login, o frontend obtém o ID token e o UID do usuário.
+2. O frontend chama o backend. Na requisição POST /auth/login, o frontend envia o ID token no cabeçalho Authorization e o UID no campo uuid do corpo da requisição.
+```bash
+POST /auth/login
+Authorization: Bearer <ID_TOKEN_DO_FIREBASE>
+Content-Type: application/json
 
-Com Docker em execução, entre em `trip.share/`. Opcionalmente copie `.env.example` para `.env` e
-ajuste a configuração. Nunca versione credenciais reais.
+{ "uuid": "<UID_DO_USUARIO_NO_FIREBASE>" }
+```
+
+3. O backend valida o token. Antes de a requisição chegar ao controller, o filtro de autenticação usa o Firebase Admin SDK para verificar a assinatura, a validade e o projeto de destino do token. Após a validação, o filtro disponibiliza o UID e o e-mail presentes no token ao Spring Security.
+4. O TripShare localiza o perfil. O serviço de login confere se o uuid enviado no corpo corresponde ao UID do token validado. Em seguida, busca o perfil no PostgreSQL por esse UID e verifica a situação da conta. Se o perfil existir e a conta estiver ativa, o backend responde com 200 OK e os dados do usuário.
 
 ```bash
-# Banco disponível e atualizado, sem executar a aplicação
-./scripts/database.sh start
+Respostas de erro
 
-# Verificar histórico e versões pendentes
-./scripts/database.sh status
-
-# Reiniciar e verificar migrations novamente
-./scripts/database.sh restart
-
-# Aplicar novas versões sem reiniciar PostgreSQL
-./scripts/database.sh migrate
-
-# Inserir demonstração explicitamente, somente em desenvolvimento
-./scripts/database.sh start --demo
-
-# Aplicação Java local: Compose fornece a conexão; Spring executa Flyway antes do JPA
-./mvnw spring-boot:run
-
-# Aplicação completa em containers: PostgreSQL -> migrate -> spring
-docker compose --profile app up --build
-
-# Encerrar containers preservando dados
-docker compose --profile app down
+Código HTTP	Quando ocorre
+401 Unauthorized	O token está ausente, inválido ou expirado, ou o uuid enviado no corpo difere do UID do token.
+403 Forbidden	O perfil existe no TripShare, mas a conta está suspensa.
+404 Not Found	O token é válido, mas ainda não existe um perfil no TripShare associado ao UID.
+503 Service Unavailable	O serviço de autenticação está indisponível e o backend não consegue validar o token.
 ```
 
-Os comandos do script funcionam a partir de qualquer diretório. `migrate` e `status` pressupõem
-que PostgreSQL já esteja disponível. Para `restart`, encerre primeiro a aplicação local para não
-executar operações contra um banco em reinicialização. O comando não encerra processos Java externos.
+## Fluxo de Autenticação no código
 
-O contrato de atualização automática cobre os comandos do projeto, a execução completa do Compose e
-a inicialização do Spring Boot. `docker start`, `docker restart`, o botão do Docker Desktop e
-`docker compose up postgres` isoladamente não executam o migrador. Use o script para iniciar só o banco.
-
-### Conexão
-
-| Ambiente | Host | Configuração |
-|---|---|---|
-| Java local com suporte Compose | Porta publicada em localhost | Descoberta automática pelo Spring |
-| Java em container | `postgres:5432` | `SPRING_DATASOURCE_URL/USERNAME/PASSWORD` |
-| Migrador em container | `postgres:5432` | `FLYWAY_URL/USER/PASSWORD` |
-| Teste de inicialização | H2 em memória | Perfil Spring `test`, Flyway desabilitado |
-| Testes de banco | PostgreSQL 16 temporário | Testcontainers, esquemas isolados |
-
-Os padrões `mydatabase` e `postgres/postgres` são exclusivamente de desenvolvimento. Configure
-variáveis de ambiente ou `.env`. Alterar essas variáveis não altera usuários/senhas já existentes
-em um volume PostgreSQL inicializado: alterações de credenciais existentes exigem operação administrativa.
-Não execute o Dockerfile isoladamente esperando que ele forneça banco ou credenciais.
-Em produção, use usuários distintos com os privilégios necessários à aplicação e às migrations;
-não use a conta administrativa de desenvolvimento nem exponha a porta do banco publicamente.
-`SPRING_PORT` permite mudar a porta HTTP publicada. Para executar projetos Compose isolados na mesma
-máquina, ajuste também `COMPOSE_PROJECT_NAME`, `POSTGRES_CONTAINER_NAME`, `SPRING_CONTAINER_NAME` e as portas.
-
-## Versionamento e recuperação
-
-Flyway 12.4.0 é gerenciado pelo Spring Boot 4.1.1. O starter e o módulo PostgreSQL habilitam a
-integração da aplicação. O estágio Docker `migrate` usa o mesmo projeto Maven e a mesma versão,
-sem exigir uma imagem Flyway AMD64 em máquinas ARM64. Os arquivos SQL são montados somente para leitura
-nesse serviço, permitindo que `migrate` e `status` enxerguem as versões do checkout atual.
-O Maven do migrador opera offline, com dependências previamente resolvidas durante o build.
-
-| Versão | Responsabilidade |
-|---|---|
-| V1 | Identidade, referências e catálogo |
-| V2 | Viagens e planejamento |
-| V3 | Comunidade, imagens, notificações e moderação |
-| V4 | Integridade entre tabelas, índices, projeções públicas e ranking |
-| V5 | Categorias, ritmos e meios de transporte iniciais |
-| V6 | Verificação adiável da FK de dias para permitir a cascata completa de exclusão da viagem |
-| V7 | Reset autorizado de usuários legados; auth Firebase, users.auth_id obrigatório e remoção da autenticação local |
-
-O histórico fica em `flyway_schema_history`. Cada inicialização valida checksums e aplica apenas
-versões pendentes, sob o bloqueio de migração do Flyway. A referência de versão mais recente são
-os scripts distribuídos com a aplicação/checkout, sem buscar SQL remoto em tempo de execução.
-
-`clean` e baseline automática estão desabilitados. Migrações fora de ordem, scripts com nome
-inválido, versões ausentes/mais recentes no banco e checksums diferentes devem interromper a execução.
-Hibernate usa `validate`: não cria nem modifica tabelas e verifica os mapeamentos de `Auth` e `User`.
-
-Para evoluir, adicione `V8__description.sql`, depois V9 etc. Nunca edite migrations já aplicadas.
-Inclua a alteração Java correspondente e testes na mesma história de usuário quando houver entidades.
-Uma migration PostgreSQL transacional com erro é revertida; investigue antes de repetir. Não use
-`repair` para esconder divergências de scripts. Índices concorrentes futuros exigem migration própria
-e tratamento específico de transação e bloqueio, não um `CONCURRENTLY` adicionado arbitrariamente.
-
-Se um banco já contiver tabelas sem histórico Flyway, o processo para com erro. Faça um dump,
-compare o esquema e planeje uma baseline explícita ou transformação própria; não apague o volume.
-
-### Transição Firebase (V7)
-
-A V7 é destrutiva por decisão explícita para o ambiente de desenvolvimento. `TRUNCATE users CASCADE`
-remove usuários antigos e todas as tabelas dependentes, pois não há mapeamento confiável para UIDs
-Firebase. Os catálogos e o histórico Flyway permanecem. Faça um `pg_dump` para `.old/` antes da
-primeira aplicação; o README contém o comando. A transação da migration reverte a limpeza se falhar.
-
-`auth` possui somente `id uuid` e `uuid varchar(128)`, ambos obrigatórios. `uuid` é o UID opaco e
-único do Firebase, não um UUID PostgreSQL. `users.auth_id` é uma FK obrigatória e única: cada perfil
-possui uma identidade exclusiva. A busca de login usa esse vínculo, após validar o ID token e
-comparar o UID recebido com a identidade verificada. Cadastro cria as duas linhas atomicamente.
-Não há senha, sessão ou recuperação de senha local. Consulte os contratos `/auth/register` e
-`/auth/login` no README.
-Antes de alterações em dados reais, valide restauração do backup e compatibilidade da aplicação.
-`down --volumes` apaga dados e não faz parte do fluxo de atualização.
-
-## Seeds
-
-V5 insere dados de referência reais do domínio: sete categorias, três ritmos e quatro transportes.
-Novas opções de referência entram em uma nova migration versionada.
-
-`scripts/seeds/demo.sql` contém fixtures explicitamente fictícias, separadas do JAR e das migrations.
-O script só as executa com `--demo` e `APP_ENV=development` (padrão local). O seed usa transação,
-bloqueio de concorrência, UUIDs estáveis e `ON CONFLICT DO NOTHING`; repetições não duplicam dados
-nem sobrescrevem edições. Se um identificador natural estiver ocupado por um registro incompatível,
-o seed falha e reverte, em vez de associar registros a uma conta real.
-
-São criadas as contas `demo_alex`, `demo_sam` e `demo_admin`, com emails no domínio reservado
-`example.invalid`; a última tem papel ADMIN. As identidades `demo-only-alex`, `demo-only-sam` e
-`demo-only-admin` são UIDs fictícios e não habilitam login Firebase. Nunca use essas contas em produção.
-Locais de demonstração têm origem `DEMO` e não representam atrações reais, preços ou coordenadas verificados.
-O seed não produz uploads fictícios nem solicita serviços externos.
-
-## Convenções e integridade
-
-- UUIDs nativos nas entidades; códigos naturais nas referências; chaves compostas nos vínculos simples.
-- `created_at` e `updated_at` são instantes `timestamptz`; triggers mantêm `updated_at`.
-  `version` nas raízes prepara o controle otimista futuro; a aplicação deve incrementá-lo com `@Version`.
-- Datas pessoais ficam em `trips`. `trip_days.day_number` começa em 1. Horários são locais ao fuso do destino;
-  o identificador de fuso IANA deverá ser validado pela aplicação.
-- `duration_days` é calculado como término menos início mais um. Não se armazena uma segunda duração editável.
-- Email e username têm índices únicos em `lower(...)`; telefone não é identificador único. Login usa
-  o UID validado, consultando `auth.uuid` e `users.auth_id`, ambos com índices únicos.
-- Firebase é responsável pelas credenciais e tokens. Não persistir senhas, tokens originais ou
-  chaves de serviço no banco e não expor esses dados em logs ou projeções públicas.
-- Durações/valores desconhecidos são `NULL`, nunca zero inventado. Preço conhecido exige moeda e vice-versa.
-  Coordenadas são um par completo com limites geográficos. Horários de locais usam dias ISO 1–7 e suportam
-  múltiplos períodos e fechamento no dia seguinte; ausência de linhas significa informação desconhecida.
-- Atividades conservam nome, observações e localização independentemente do catálogo. Prefira marcar um local
-  com `removed_at` ao retirá-lo do catálogo. Exclusão física desfaz a referência e preserva o snapshot da atividade.
-- Um dia não pode pertencer a outra viagem nem exceder o período. Antes de encurtar uma viagem, remova/realoque
-  atividades e dias fora do novo intervalo, inclusive dias vazios. Atividades sem dia são itens não alocados.
-- A ordem pode ser reorganizada em transação com `SET CONSTRAINTS uq_itinerary_activities_position DEFERRED`.
-  Mudanças de planejamento descartam trechos derivados afetados; a aplicação deverá recalculá-los.
-- Sobreposições e excesso do intervalo disponível geram avisos na futura aplicação: não há proibição absoluta
-  no banco porque RF-13 permite salvar após ciência do aviso. Estimativas ausentes permanecem pendentes.
-- Um roteiro público exige descrição, categoria, data de publicação e uma atividade com local identificado.
-  A constraint de atividades é verificada no fim da transação para permitir salvamento atômico.
-- Curtidas, favoritos, votos e notas são vínculos diferentes. Autoria, conta ativa e disponibilidade para
-  novas interações devem ser verificadas nos futuros serviços; a unicidade protege contra requisições repetidas.
-- `notifications.event_key` identifica a ocorrência, não somente seu tipo. A aplicação deverá gerar a chave
-  estável ao repetir uma mesma operação e outra chave para uma nova interação legítima.
-- Denúncia aponta exatamente para um roteiro ou comentário. Apenas uma denúncia PENDING por autor/alvo;
-  motivo OTHER exige descrição. O registro não aplica automaticamente uma penalidade.
-- Moderação registra administrador, justificativa e snapshot histórico. Exclusão do conteúdo pode remover
-  a denúncia, mas preserva a decisão, cujo `report_id` vira NULL. A decisão anterior pode ser referenciada por uma revisão.
-- Suspensão é vigente até revisão administrativa e bloqueia o login mesmo com token válido.
-  Aplicar/restaurar medidas e revogar tokens no Firebase são operações futuras da aplicação;
-  nenhum email, API externa ou fluxo de negócio é disparado por trigger.
-
-## Exclusão e privacidade
-
-Viagens e roteiros começam privados. Excluir viagem remove seus roteiros, atividades, imagens,
-interações, notificações e denúncias. Excluir um roteiro remove seus dependentes. Despublicar apenas
-altera a visibilidade e conserva interações e favoritos. Remover arquivos de object storage é tarefa
-da aplicação após a transação; uma FK não apaga arquivos externos.
-
-Cópias têm conteúdo independente e não herdam interações. `source_itinerary_id` usa SET NULL quando
-o original é excluído; nome do autor e título de origem continuam como atribuição histórica.
-
-As views `public_profiles`, `public_itineraries`, `public_itinerary_activities`,
-`public_itinerary_comments` e `public_itinerary_images` não projetam credenciais nem datas privadas.
-Elas filtram conteúdo indisponível e autores suspensos. Não são endpoints nem substituem autorização:
-credenciais de banco não devem ser entregues aos clientes, e consultas pessoais precisam validar o proprietário.
-`itinerary_metrics` é uma view interna, sem autorização por usuário.
-
-## Consultas de referência
-
-Use parâmetros preparados em Java; os valores abaixo são parâmetros psql para exemplos interativos.
-
-```sql
--- Feed geral: primeira página; cursor usa published_at + id das últimas linhas.
-SELECT id, title, author_name, destination_name, like_count, vote_count, published_at
-FROM public_itineraries
-ORDER BY published_at DESC, id DESC
-LIMIT 20;
-
--- Próxima página: o predicado do cursor acompanha exatamente a ordenação.
-SELECT id, title, published_at
-FROM public_itineraries
-WHERE (published_at, id) < (:'cursor_published_at'::timestamptz, :'cursor_id'::uuid)
-ORDER BY published_at DESC, id DESC
-LIMIT 20;
-
--- Feed Seguindo, após autenticar e determinar user_id no servidor.
-SELECT p.id, p.title, p.author_name, p.published_at
-FROM public_itineraries p
-JOIN user_follows f ON f.followed_id = p.author_id
-WHERE f.follower_id = :'user_id'::uuid
-ORDER BY p.published_at DESC, p.id DESC
-LIMIT 20;
-
--- Favoritos preservados: conteúdo privado/moderado aparece indisponível, sem vazamento.
-SELECT f.itinerary_id, p.title, (p.id IS NOT NULL) AS available
-FROM itinerary_favorites f
-LEFT JOIN public_itineraries p ON p.id = f.itinerary_id
-WHERE f.user_id = :'user_id'::uuid
-ORDER BY f.created_at DESC, f.itinerary_id DESC
-LIMIT 20;
-
--- Ranking: filtros são aplicados ANTES do row_number.
-SELECT ranking_position, itinerary_id, title, vote_count, average_rating, rating_count
-FROM itinerary_ranking(:'destination_id'::uuid, 'MUSEUM')
-ORDER BY ranking_position
-LIMIT 20;
-
--- Sem filtros: average_rating NULL significa Sem avaliações; zero só participa do desempate.
-SELECT ranking_position, itinerary_id, vote_count, average_rating, rating_count
-FROM itinerary_ranking()
-ORDER BY ranking_position
-LIMIT 20;
-```
-
-O ranking ordena por votos decrescentes, média decrescente, publicação mais antiga e UUID crescente.
-Likes e favoritos nunca entram no cálculo. A aplicação define `published_at` na publicação confirmada;
-na republicação, usar o instante da nova publicação. Alterações de conteúdo não devem atualizar esse campo.
-A busca por interesses usa `EXISTS` com `place_categories` e ao menos um interesse solicitado, evitando
-duplicar roteiros com várias categorias. Índices existentes atendem às FKs e filtros principais;
-busca textual ampla deve ser medida antes de adicionar extensões/índices especializados.
-
-## Testes
-
+### Config
+1. FirebaseProperties.java — localização das credenciais
+   Essa classe representa a configuração de que o backend precisa para encontrar o arquivo de credenciais do Firebase. Ela é um record com um único campo, keyPath.
 ```bash
-# Sem Docker: inicialização JPA com H2; não valida SQL PostgreSQL.
-./mvnw clean verify
-
-# Docker obrigatório: migrations, constraints, seeds, concorrência, privacidade e ranking.
-./mvnw verify -Pdatabase-it
+ A anotação @ConfigurationProperties(prefix = "app.firebase") faz o Spring associar a propriedade app.firebase.key-path ao campo Java keyPath. O valor vem de application.properties:
+ app.firebase.key-path=${FIREBASE_KEY_PATH:file:../.secrets/firebase.json}
 ```
 
-Testcontainers inicia PostgreSQL temporário e não utiliza o volume do desenvolvimento. Cada cenário
-usa um esquema isolado. O perfil falha quando Docker não está acessível. O build Docker mantém os
-testes de inicialização e não tenta iniciar containers dentro do estágio de compilação.
+Se a variável de ambiente FIREBASE_KEY_PATH estiver definida, o Spring usa seu valor. Caso contrário, usa file:../.secrets/firebase.json. O prefixo file: indica um arquivo no sistema de arquivos, e o caminho relativo é resolvido a partir do diretório de execução do backend. Isso permite usar caminhos diferentes em desenvolvimento e em produção sem alterar o código Java.
+As anotações @Validated e @NotBlank exigem que o caminho configurado contenha texto. A abertura do arquivo acontece na etapa seguinte. Essa distinção ajuda a diagnosticar uma falha de inicialização: um valor em branco falha na validação da propriedade, enquanto um caminho preenchido que aponta para um arquivo inexistente falha na leitura.
 
-## Diagrama de relacionamentos
+2. FirebaseConfig.java — inicialização do Firebase Admin SDK
+   Essa classe usa o caminho fornecido por FirebaseProperties para inicializar o Firebase Admin SDK. A anotação @Configuration identifica a classe como configuração do Spring, e @EnableConfigurationProperties(FirebaseProperties.class) habilita o carregamento das propriedades descritas acima. Com @Profile("!test"), essa configuração só é ativada quando o perfil test está inativo. Assim, os testes podem fornecer substitutos para as dependências do Firebase.
 
-```mermaid
-erDiagram
-    auth ||--o| users : identifies
-    users ||--o{ trips : owns
-    destinations ||--o{ trips : receives
-    destinations ||--o{ places : contains
-    categories ||--o{ place_categories : classifies
-    places ||--o{ place_categories : has
-    places ||--o{ place_opening_hours : opens
-    places ||--o{ place_images : illustrates
-    travel_paces ||--o{ trips : guides
-    transport_modes ||--o{ trips : uses
-    trips ||--o{ trip_interests : selects
-    categories ||--o{ trip_interests : represents
-    trips ||--o{ trip_days : contains
-    trips ||--o{ itineraries : organizes
-    categories ||--o{ itineraries : classifies
-    itineraries o|--o{ itineraries : copied_from
-    itineraries ||--o{ itinerary_activities : contains
-    trip_days o|--o{ itinerary_activities : allocates
-    places o|--o{ itinerary_activities : references
-    itinerary_activities ||--o{ itinerary_legs : departs
-    itinerary_activities ||--o{ itinerary_legs : arrives
-    transport_modes ||--o{ itinerary_legs : uses
-    users ||--o{ itinerary_likes : likes
-    users ||--o{ itinerary_votes : votes
-    users ||--o{ itinerary_ratings : rates
-    users ||--o{ itinerary_favorites : saves
-    users ||--o{ itinerary_comments : writes
-    itineraries ||--o{ itinerary_likes : receives
-    itineraries ||--o{ itinerary_votes : receives
-    itineraries ||--o{ itinerary_ratings : receives
-    itineraries ||--o{ itinerary_favorites : receives
-    itineraries ||--o{ itinerary_comments : receives
-    itineraries ||--o{ itinerary_images : illustrates
-    users ||--o{ user_follows : follows
-    users ||--o{ user_follows : followed_by
-    users ||--o{ notifications : receives
-    users ||--o{ notifications : acts
-    itineraries ||--o{ notifications : concerns
-    itinerary_comments o|--o{ notifications : mentions
-    users ||--o{ content_reports : reports
-    itineraries o|--o{ content_reports : reported
-    itinerary_comments o|--o{ content_reports : reported
-    users ||--o{ moderation_actions : decides
-    content_reports o|--o{ moderation_actions : reviews
-    moderation_actions o|--o{ moderation_actions : revises
-```
+A classe registra dois beans, objetos que o Spring cria e disponibiliza para injeção em outras classes:
 
-## Rastreabilidade de requisitos
-
-| RF | Suporte no banco | Responsabilidade da aplicação / Firebase |
+| Bean | Como é criado | Para que serve |
 |---|---|---|
-| 01 | auth, users, unicidade de UID/email/username | Firebase cria a conta; backend cadastra o perfil autenticado |
-| 02 | users.auth_id, auth.uuid, users.status | Validar ID token, conferir UID e retornar perfil ativo |
-| 03 | Sem tokens de recuperação locais | Recuperação de senha pelo Firebase no frontend |
-| 04 | users, public_profiles | Edição pelo proprietário e limites de apresentação |
-| 05 | trips, destinations, duração calculada | Resolver destino e listar só viagens próprias |
-| 06 | Período e cascatas de trips | Confirmar efeitos e realocar antes de encurtar |
-| 07 | trip_interests, trip_days, referências | Exigir interesses e preservar roteiro existente |
-| 08 | places, destination_id, place_categories | Busca paginada e fontes externas |
-| 09 | Origem, campos opcionais e snapshots | Indicar dados ausentes e locais removidos |
-| 10 | Catálogo, categorias e preferências | Seleção e explicação das recomendações |
-| 11 | Itinerários AUTOMATIC, dias, atividades, trechos | Geração, horários, pendências e confirmação |
-| 12 | Itinerários MANUAL privados | Cadastro manual vinculado à viagem própria |
-| 13 | Atividades, ordem, limites de dias e cascatas | Salvar atomicamente e confirmar avisos |
-| 14 | Coordenadas e posição das atividades | Renderização e fallback do mapa |
-| 15 | itinerary_legs, status e estimativas opcionais | Consultar provedor e recalcular |
-| 16 | Visibilidade, campos e atividade obrigatória | Confirmar publicação/despublicação |
-| 17 | Projeções públicas e métricas | Consulta pública sem dados pessoais |
-| 18 | Categoria, destino, duração e índices | Combinar filtros e interesses com EXISTS |
-| 19 | Publicação e user_follows | Feed paginado e cursor |
-| 20 | itinerary_likes, PK composta | Validar autor/visibilidade e notificar |
-| 21 | itinerary_comments, limite e edited_at | Autorizar edição/exclusão |
-| 22 | itinerary_ratings, nota e PK composta | Validar autor e apresentar média NULL |
-| 23 | itinerary_votes, PK composta | Voto positivo de outro autor e retirada |
-| 24 | itinerary_metrics, itinerary_ranking | Paginação/apresentação do ranking filtrado |
-| 25 | itinerary_favorites | Lista privada e itens indisponíveis |
-| 26 | itinerary_images, MIME/tamanho/posição | Validar arquivo real e gerenciar storage |
-| 27 | user_follows, unicidade e autores distintos | Disponibilidade do perfil e autorização |
-| 28 | Trips, origem e visibilidade dos itinerários | Histórico próprio e filtros |
-| 29 | Origem COPIED, referência e atribuição | Copiar conteúdo em transação sem interações |
-| 30 | notifications, event_key e read_at | Criar evento na transação, sem duplicar |
-| 31 | content_reports, motivo e pendência única | Validar acesso e aceitar denúncia |
-| 32 | moderation_actions, flags e users.status | Verificar ADMIN, aplicar medida e coordenar revogação Firebase |
+| `FirebaseApp` | O método `firebaseApp(...)` abre o arquivo com `ResourceLoader`, carrega as credenciais com `GoogleCredentials.fromStream(...)` e inicializa uma instância chamada `tripshare`. | Mantém a configuração do SDK durante a execução do backend. Ao encerrar a aplicação, o Spring chama `delete()` nessa instância, conforme `@Bean(destroyMethod = "delete")`. |
+| `FirebaseAuth` | O método `firebaseAuth(...)` recebe o `FirebaseApp` já inicializado e chama `FirebaseAuth.getInstance(app)`. | Fornece o cliente que o `FirebaseTokenService` usa para verificar os ID tokens recebidos pela API. |
 
-O dicionário completo de colunas, tipos, valores padrão e constraints está em [database-dictionary.md](database-dictionary.md).
+3. SecurityConfig.java — proteção das rotas da API
+   Essa classe define o bean SecurityFilterChain, que determina quais regras de segurança o Spring aplica às requisições HTTP. É aqui que o TripShare registra o filtro que funciona como middleware de autenticação.
+   | Configuração | Efeito no TripShare |
+   |---|---|
+   | `csrf(AbstractHttpConfigurer::disable)` | Desativa a proteção CSRF do Spring para essa cadeia. A API recebe a credencial do usuário explicitamente pelo cabeçalho `Authorization`. |
+   | `SessionCreationPolicy.STATELESS` | O Spring Security não usa uma sessão HTTP para manter o usuário autenticado entre chamadas. Cada requisição precisa apresentar seu próprio Bearer token. |
+   | `anyRequest().authenticated()` | Exige autenticação em todas as rotas, inclusive `POST /auth/login` e `POST /auth/register`. Nesses dois casos, o frontend já deve ter obtido o ID token no Firebase. |
+   | `addFilterBefore(...)` | Posiciona o `FirebaseAuthenticationFilter` antes de `UsernamePasswordAuthenticationFilter`. Assim, o filtro do TripShare pode validar o token e preencher a identidade do usuário antes de o Spring avaliar o acesso à rota. |
+   | `exceptionHandling(...)` | Configura respostas JSON para falhas tratadas pelo Spring Security. O `authenticationEntryPoint` responde com `401` quando é necessária autenticação, e o `accessDeniedHandler` responde com `403` quando o acesso é negado. |
+
+### Fluxo
+0. Antes da primeira requisição, o Spring prepara o backend. FirebaseConfig.firebaseApp(...) 
+lê as credenciais e inicializa o Firebase Admin SDK. FirebaseConfig.firebaseAuth(...) fornece 
+o cliente usado para verificar os tokens. Por fim, SecurityConfig.filterChain(...) registra a cadeia de segurança e inclui o
+FirebaseAuthenticationFilter. O @Bean faz essa configuração ficar disponível durante a execução da aplicação.
+1. A requisição chega ao backend com o token do Firebase. O cliente envia o ID token no cabeçalho Authorization. Para chamar POST /auth/login, a API do TripShare também exige o UID do Firebase no campo uuid do corpo. Uma chamada a esse endpoint tem o seguinte formato:
+```bash
+    POST /auth/login
+Authorization: Bearer <ID_TOKEN_DO_FIREBASE>
+Content-Type: application/json
+
+{ "uuid": "<UID_DO_USUARIO_NO_FIREBASE>" }
+```
+2. FirebaseAuthenticationFilter.doFilterInternal(...) lê o cabeçalho. Antes de a requisição chegar ao controller, o filtro chama request.getHeader("Authorization"), verifica o prefixo Bearer  e extrai o token. Se o cabeçalho estiver ausente, o formato estiver incorreto ou o token estiver vazio.
+3. FirebaseTokenService.validate(...) verifica o token. O filtro entrega o token ao serviço, que chama FirebaseAuth.verifyIdToken(...). Após a verificação, o serviço extrai token.getUid() e token.getEmail() e devolve new AuthenticatedUser(uid, email). Um token inválido ou expirado resulta em 401 Unauthorized. Se o serviço de autenticação estiver indisponível, o filtro devolve 503 Service Unavailable.
+4. O filtro registra quem fez a requisição. De volta a doFilterInternal(...), o filtro cria um contexto de segurança e coloca nele o AuthenticatedUser retornado pelo serviço: O construtor de três argumentos cria uma autenticação marcada como válida. identity identifica o usuário, e List.of() indica que o filtro não atribuiu permissões específicas a ele. setContext(...) disponibiliza essa identidade para o restante da requisição. chain.doFilter(...) permite que o processamento continue.
+5. O Spring Security aplica a regra .authenticated(). A regra configurada em SecurityConfig.filterChain(...) consulta a autenticação registrada no passo anterior. Como o contexto contém um usuário autenticado, o Spring permite que a chamada siga para o endpoint. Até aqui, o fluxo é comum às rotas protegidas
+6. No controller que precisa de autenticação, deve receber o corpo com a identidade @AuthenticationPrincipal AuthenticatedUser identity recupera a identidade registrada pelo filtro no passo 4. Com os dois argumentos prontos, o controller chama authService.login(request, identity).
+7. **Os próximos passos são específicos de POST /auth/login.**  AuthController.login(...) recebe o corpo e a identidade. @Valid @RequestBody LoginRequest request lê o JSON e verifica se uuid foi preenchido e tem até 128 caracteres. Um corpo inválido resulta em 400 Bad Request. Já @AuthenticationPrincipal AuthenticatedUser identity recupera a identidade registrada pelo filtro no passo 4. Com os dois argumentos prontos, o controller chama authService.login(request, identity).
+8. AuthService.login(...) confere o UID e busca o perfil no PostgreSQL. Primeiro, requireSameUid(request.uuid(), identity) compara o UID informado no corpo com o UID extraído do token. Se forem diferentes, o serviço lança AuthException com o motivo UID_MISMATCH. Se coincidirem, UserRepository.findByAuthUuid(identity.uid()) busca o perfil associado ao UID autenticado. O serviço também verifica se a conta está suspensa. ApiExceptionHandler.authentication(...) converte essas falhas em respostas HTTP:
+   | Situação | Resposta |
+   |---|---|
+   | O UID do corpo difere do UID do token | `401 Unauthorized` |
+   | O UID é válido, mas o perfil ainda não existe no PostgreSQL | `404 Not Found` |
+   | O perfil existe e está suspenso | `403 Forbidden` |
+9. UserResponse.from(user) monta a resposta. Se as verificações passarem, o serviço converte o perfil em UserResponse. O controller devolve esse objeto, e o Spring o envia como JSON com 200 OK. Como a política de sessão é STATELESS, a próxima chamada protegida deve enviar novamente um ID token válido e repete os passos 1 a 5 antes de chegar ao seu próprio controller.
