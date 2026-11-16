@@ -33,11 +33,11 @@ INSERT INTO place_categories (place_id, category_code) VALUES
     ('30000000-0000-0000-0000-000000000001', 'MUSEUM'),
     ('30000000-0000-0000-0000-000000000002', 'LANDMARK') ON CONFLICT DO NOTHING;
 
-INSERT INTO trips (id, user_id, destination_id, title, starts_on, ends_on, pace_code, transport_mode_code) VALUES
+INSERT INTO trips (id, user_id, destination_id, title, starts_on, ends_on, duration_days, pace_code, transport_mode_code) VALUES
     ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
-     '20000000-0000-0000-0000-000000000001', 'Demo museum trip', '2030-01-10', '2030-01-12', 'RELAXED', 'WALKING'),
+     '20000000-0000-0000-0000-000000000001', 'Demo museum trip', '2030-01-10', '2030-01-12', 3, 'RELAXED', 'WALKING'),
     ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002',
-     '20000000-0000-0000-0000-000000000001', 'Demo copied trip', '2030-02-10', '2030-02-12', 'MODERATE', 'WALKING')
+     '20000000-0000-0000-0000-000000000001', 'Demo copied trip', '2030-02-10', '2030-02-12', 3, 'MODERATE', 'WALKING')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO trip_interests (trip_id, category_code) VALUES
