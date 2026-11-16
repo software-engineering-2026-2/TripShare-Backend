@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ufcg.software.engineering.trip.share.handlers.FirebaseAuthenticationFilter;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 
 /**
  * Testa o SecurityConfig + FirebaseAuthenticationFilter com Firebase mockado
@@ -95,7 +95,7 @@ class FirebaseSecurityMockMvcTest {
     @Test
     void shouldReturnUid_whenTokenIsValid_onProtectedEndpoint() throws Exception {
         when(firebaseTokenService.validate(VALID_TOKEN))
-                .thenReturn(new FirebaseIdentity("test-firebase-uid", "test@example.invalid"));
+                .thenReturn(new AuthenticatedUser("test-firebase-uid", "test@example.invalid"));
 
         // Endpoint protegido responde com o UID do principal: prova de autenticação efetiva
         // dentro do SecurityFilterChain (não apenas de execução do filtro).
@@ -118,7 +118,7 @@ class FirebaseSecurityMockMvcTest {
     
         @GetMapping("/whoami")
         Map<String, Object> whoAmI(Authentication authentication) {
-            return Map.of("uid", ((FirebaseIdentity) authentication.getPrincipal()).uid());
+            return Map.of("uid", ((AuthenticatedUser) authentication.getPrincipal()).uid());
         }
     }
 }

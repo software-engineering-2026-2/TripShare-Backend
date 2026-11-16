@@ -23,7 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -44,9 +44,9 @@ class UserProfileApiTest {
         jdbc.update("DELETE FROM users");
         jdbc.update("DELETE FROM auth");
         when(tokenService.validate(ALICE_TOKEN))
-                .thenReturn(new FirebaseIdentity(ALICE_UID, "alice@example.invalid"));
+                .thenReturn(new AuthenticatedUser(ALICE_UID, "alice@example.invalid"));
         when(tokenService.validate(BOB_TOKEN))
-                .thenReturn(new FirebaseIdentity(BOB_UID, "bob@example.invalid"));
+                .thenReturn(new AuthenticatedUser(BOB_UID, "bob@example.invalid"));
         register(ALICE_TOKEN, ALICE_UID, "alice", "Alice", "Campina Grande");
         register(BOB_TOKEN, BOB_UID, "bob", "Bob", "Recife");
     }

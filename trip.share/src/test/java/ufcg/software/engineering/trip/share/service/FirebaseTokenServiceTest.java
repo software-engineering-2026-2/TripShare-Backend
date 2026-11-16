@@ -30,7 +30,7 @@ class FirebaseTokenServiceTest {
         when(token.getUid()).thenReturn("opaque-firebase-uid");
         when(token.getEmail()).thenReturn("user@example.invalid");
         assertThat(service.validate("id-token"))
-                .isEqualTo(new FirebaseIdentity("opaque-firebase-uid", "user@example.invalid"));
+                .isEqualTo(new AuthenticatedUser("opaque-firebase-uid", "user@example.invalid"));
     }
 
     @ParameterizedTest

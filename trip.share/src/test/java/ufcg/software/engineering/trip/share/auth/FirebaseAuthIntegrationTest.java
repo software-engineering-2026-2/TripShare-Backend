@@ -22,7 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 /**
@@ -54,7 +54,7 @@ class FirebaseAuthIntegrationTest {
     @Test
     void shouldAllowAccessWithUidPrincipal_whenBearerTokenIsValid() throws Exception {
         when(firebaseTokenService.validate(VALID_TOKEN))
-                .thenReturn(new FirebaseIdentity("test-firebase-uid", "test@example.invalid"));
+                .thenReturn(new AuthenticatedUser("test-firebase-uid", "test@example.invalid"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "Bearer " + VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -87,7 +87,7 @@ class FirebaseAuthIntegrationTest {
     void shouldAllowAccess_whenBearerSchemeIsLowercase() throws Exception {
         // auth-scheme é case-insensitive por RFC 9110 §11.1: "bearer" deve autenticar igual a "Bearer"
         when(firebaseTokenService.validate(VALID_TOKEN))
-                .thenReturn(new FirebaseIdentity("lowercase-bearer-uid", "test@example.invalid"));
+                .thenReturn(new AuthenticatedUser("lowercase-bearer-uid", "test@example.invalid"));
 
         mockMvc.perform(get("/whoami").header(HttpHeaders.AUTHORIZATION, "bearer " + VALID_TOKEN))
                 .andExpect(status().isOk())
@@ -108,7 +108,7 @@ class FirebaseAuthIntegrationTest {
 
         @GetMapping("/whoami")
         Map<String, Object> whoAmI(Authentication authentication) {
-            return Map.of("uid", ((FirebaseIdentity) authentication.getPrincipal()).uid());
+            return Map.of("uid", ((AuthenticatedUser) authentication.getPrincipal()).uid());
         }
     }
 }

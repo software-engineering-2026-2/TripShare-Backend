@@ -22,7 +22,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateProfile(UpdateUserRequest request, FirebaseIdentity identity) {
+    public UserResponse updateProfile(UpdateUserRequest request, AuthenticatedUser identity) {
         User user = userRepository.findByAuthUuid(identity.uid())
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
 

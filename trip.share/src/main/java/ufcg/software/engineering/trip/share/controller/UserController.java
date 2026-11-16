@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import ufcg.software.engineering.trip.share.dto.UpdateUserRequest;
 import ufcg.software.engineering.trip.share.dto.UserPublicResponse;
 import ufcg.software.engineering.trip.share.dto.UserResponse;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.UserService;
 
 @RestController
@@ -25,7 +25,7 @@ public class UserController {
     }
 
     @PatchMapping("/me")
-    public UserResponse updateProfile(@AuthenticationPrincipal FirebaseIdentity identity,
+    public UserResponse updateProfile(@AuthenticationPrincipal AuthenticatedUser identity,
                                       @Valid @RequestBody UpdateUserRequest request) {
         return userService.updateProfile(request, identity);
     }

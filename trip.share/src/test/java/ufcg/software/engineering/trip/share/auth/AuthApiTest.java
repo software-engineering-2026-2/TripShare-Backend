@@ -21,7 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -37,7 +37,7 @@ class AuthApiTest {
         jdbc.update("DELETE FROM users");
         jdbc.update("DELETE FROM auth");
         when(tokenService.validate("valid-token"))
-                .thenReturn(new FirebaseIdentity("firebase-uid", "user@example.invalid"));
+                .thenReturn(new AuthenticatedUser("firebase-uid", "user@example.invalid"));
     }
 
     private ResultActions request(String endpoint, String body) throws Exception {
@@ -135,7 +135,7 @@ class AuthApiTest {
     @NullAndEmptySource
     @ValueSource(strings = {"not-an-email", "   ", " user@example.invalid"})
     void register_invalidFirebaseEmail_shouldReturn400WithoutWrites(String email) throws Exception {
-        when(tokenService.validate("valid-token")).thenReturn(new FirebaseIdentity("firebase-uid", email));
+        when(tokenService.validate("valid-token")).thenReturn(new AuthenticatedUser("firebase-uid", email));
         register().andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM auth", Integer.class)).isZero();
     }
@@ -166,7 +166,7 @@ class AuthApiTest {
     @Test
     void register_duplicateUsernameIgnoringCase_shouldReturn409() throws Exception {
         register().andExpect(status().isCreated());
-        when(tokenService.validate("valid-token")).thenReturn(new FirebaseIdentity("second-uid", "second@example.invalid"));
+        when(tokenService.validate("valid-token")).thenReturn(new AuthenticatedUser("second-uid", "second@example.invalid"));
         request("register", "{\"uuid\":\"second-uid\",\"username\":\"TRAVELER\",\"name\":\"Second\"}")
                 .andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM auth", Integer.class)).isEqualTo(1);
@@ -175,7 +175,7 @@ class AuthApiTest {
     @Test
     void register_duplicateEmailIgnoringCase_shouldReturn409() throws Exception {
         register().andExpect(status().isCreated());
-        when(tokenService.validate("valid-token")).thenReturn(new FirebaseIdentity("second-uid", "USER@EXAMPLE.INVALID"));
+        when(tokenService.validate("valid-token")).thenReturn(new AuthenticatedUser("second-uid", "USER@EXAMPLE.INVALID"));
         request("register", "{\"uuid\":\"second-uid\",\"username\":\"second\",\"name\":\"Second\"}")
                 .andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM auth", Integer.class)).isEqualTo(1);

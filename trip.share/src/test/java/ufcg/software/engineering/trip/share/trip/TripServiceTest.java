@@ -17,7 +17,7 @@ import ufcg.software.engineering.trip.share.exceptions.TripException;
 import ufcg.software.engineering.trip.share.models.Trip;
 import ufcg.software.engineering.trip.share.models.User;
 import ufcg.software.engineering.trip.share.repository.*;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.TripService;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,7 +29,7 @@ class TripServiceTest {
     @InjectMocks TripService service;
 
     private final UUID tripId = UUID.randomUUID();
-    private final FirebaseIdentity identity = new FirebaseIdentity("owner", "owner@example.invalid");
+    private final AuthenticatedUser identity = new AuthenticatedUser("owner", "owner@example.invalid");
 
     private Trip loadTrip(boolean owned) {
         User user = mock(User.class);

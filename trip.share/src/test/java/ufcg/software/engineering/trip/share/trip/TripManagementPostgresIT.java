@@ -24,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -65,8 +65,8 @@ class TripManagementPostgresIT {
         new ResourceDatabasePopulator(new FileSystemResource("scripts/seeds/demo.sql")).execute(dataSource);
         jdbc.update("INSERT INTO itineraries(id,trip_id,title) VALUES (?,?,'A'), (?,?,'A')", SECOND, TRIP, PRIVATE, TRIP);
         jdbc.update("INSERT INTO itinerary_favorites(itinerary_id,user_id) SELECT ?,id FROM users WHERE username='demo_admin'", PUBLIC);
-        when(tokens.validate("owner")).thenReturn(new FirebaseIdentity("demo-only-alex", "alex@example.invalid"));
-        when(tokens.validate("other")).thenReturn(new FirebaseIdentity("demo-only-sam", "sam@example.invalid"));
+        when(tokens.validate("owner")).thenReturn(new AuthenticatedUser("demo-only-alex", "alex@example.invalid"));
+        when(tokens.validate("other")).thenReturn(new AuthenticatedUser("demo-only-sam", "sam@example.invalid"));
     }
 
     private ResultActions preview(String query) throws Exception {

@@ -51,7 +51,7 @@ public class TripService {
     }
 
     @Transactional
-    public TripResponse createTrip(CreateTripRequest request, FirebaseIdentity identity) {
+    public TripResponse createTrip(CreateTripRequest request, AuthenticatedUser identity) {
         User user = userRepository.findByAuthUuid(identity.uid())
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
         if (user.getStatus() == UserStatus.SUSPENDED) {
@@ -97,7 +97,7 @@ public class TripService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public TripDeletePreview previewDeletion(UUID tripId, FirebaseIdentity identity, int page, int size) {
+    public TripDeletePreview previewDeletion(UUID tripId, AuthenticatedUser identity, int page, int size) {
         ownedTrip(tripId, identity);
         if (page < 0 || size < 1) {
             throw new TripException(INVALID_PAGINATION);
@@ -113,7 +113,7 @@ public class TripService {
     }
 
     @Transactional
-    public void deleteTrip(UUID tripId, FirebaseIdentity identity, boolean confirmed) {
+    public void deleteTrip(UUID tripId, AuthenticatedUser identity, boolean confirmed) {
         Trip trip = ownedTrip(tripId, identity);
         if (!confirmed) {
             throw new TripException(CONFIRMATION_REQUIRED);
@@ -121,7 +121,7 @@ public class TripService {
         tripRepository.delete(trip);
     }
 
-    private Trip ownedTrip(UUID tripId, FirebaseIdentity identity) {
+    private Trip ownedTrip(UUID tripId, AuthenticatedUser identity) {
         User user = userRepository.findByAuthUuid(identity.uid())
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
         if (user.getStatus() == UserStatus.SUSPENDED) {
@@ -138,7 +138,7 @@ public class TripService {
     }
 
     @Transactional
-    public TripResponse updateTrip(UUID tripId, UpdateTripRequest request, FirebaseIdentity identity) {
+    public TripResponse updateTrip(UUID tripId, UpdateTripRequest request, AuthenticatedUser identity) {
         Trip trip = ownedTrip(tripId, identity);
 
         Destination destination = null;

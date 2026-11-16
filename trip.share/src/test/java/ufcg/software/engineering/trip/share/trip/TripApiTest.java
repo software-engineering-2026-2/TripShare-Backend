@@ -32,7 +32,7 @@ import ufcg.software.engineering.trip.share.models.Destination;
 import ufcg.software.engineering.trip.share.models.TripDay;
 import ufcg.software.engineering.trip.share.repository.DestinationRepository;
 import ufcg.software.engineering.trip.share.repository.TripDayRepository;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -56,7 +56,7 @@ class TripApiTest {
         jdbc.update("DELETE FROM auth");
 
         when(tokenService.validate("valid-token"))
-                .thenReturn(new FirebaseIdentity("firebase-uid", "user@example.invalid"));
+                .thenReturn(new AuthenticatedUser("firebase-uid", "user@example.invalid"));
         mvc.perform(post("/auth/register")
                         .header("Authorization", "Bearer valid-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -269,7 +269,7 @@ class TripApiTest {
     @Test
     void createTrip_unregisteredUser_shouldReturn404() throws Exception {
         when(tokenService.validate("unregistered-token"))
-                .thenReturn(new FirebaseIdentity("unknown-uid", "unknown@example.invalid"));
+                .thenReturn(new AuthenticatedUser("unknown-uid", "unknown@example.invalid"));
 
         postTrip("unregistered-token", """
                 {
@@ -600,7 +600,7 @@ class TripApiTest {
         UUID tripId = jdbc.queryForObject("SELECT id FROM trips", UUID.class);
 
         when(tokenService.validate("other-token"))
-                .thenReturn(new FirebaseIdentity("other-user-uid", "other@example.invalid"));
+                .thenReturn(new AuthenticatedUser("other-user-uid", "other@example.invalid"));
         mvc.perform(post("/auth/register")
                         .header("Authorization", "Bearer other-token")
                         .contentType(MediaType.APPLICATION_JSON)

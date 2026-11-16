@@ -15,7 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -38,7 +38,7 @@ public class UserApiTest {
         jdbc.update("DELETE FROM users");
         jdbc.update("DELETE FROM auth");
         when(tokenService.validate("valid-token"))
-                .thenReturn(new FirebaseIdentity("firebase-uid", "user@example.invalid"));
+                .thenReturn(new AuthenticatedUser("firebase-uid", "user@example.invalid"));
         register().andExpect(status().isCreated());
     }
 
@@ -114,7 +114,7 @@ public class UserApiTest {
     @Test
     void updateProfile_otherUser_shouldNotAffectFirstUser() throws Exception {
         when(tokenService.validate("other-token"))
-                .thenReturn(new FirebaseIdentity("other-uid", "other@example.invalid"));
+                .thenReturn(new AuthenticatedUser("other-uid", "other@example.invalid"));
         registerOther().andExpect(status().isCreated());
 
         patchMe("other-token", "{\"name\": \"Changed\"}")

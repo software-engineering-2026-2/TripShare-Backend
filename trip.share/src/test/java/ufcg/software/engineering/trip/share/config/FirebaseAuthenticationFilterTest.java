@@ -23,7 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.BadCredentialsException;
 import tools.jackson.databind.json.JsonMapper;
 import ufcg.software.engineering.trip.share.handlers.FirebaseAuthenticationFilter;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,7 +49,7 @@ class FirebaseAuthenticationFilterTest {
 
     @Test
     void shouldAuthenticate_whenBearerTokenIsValid() throws ServletException, IOException {
-        when(tokenService.validate("id-token")).thenReturn(new FirebaseIdentity("uid-1", "user@example.invalid"));
+        when(tokenService.validate("id-token")).thenReturn(new AuthenticatedUser("uid-1", "user@example.invalid"));
 
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
         request.addHeader("Authorization", "Bearer id-token");
@@ -60,7 +60,7 @@ class FirebaseAuthenticationFilterTest {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication).isNotNull();
-        assertThat(authentication.getPrincipal()).isEqualTo(new FirebaseIdentity("uid-1", "user@example.invalid"));
+        assertThat(authentication.getPrincipal()).isEqualTo(new AuthenticatedUser("uid-1", "user@example.invalid"));
         assertThat(authentication.isAuthenticated()).isTrue();
         verify(tokenService).validate("id-token");
     }
@@ -81,7 +81,7 @@ class FirebaseAuthenticationFilterTest {
     @Test
     void shouldAuthenticate_whenBearerSchemeIsNotExactCase() throws ServletException, IOException {
         // auth-scheme é case-insensitive por RFC 9110 §11.1: "bearer"/"BEARER" deve autenticar
-        when(tokenService.validate("id-token")).thenReturn(new FirebaseIdentity("uid-2", "user@example.invalid"));
+        when(tokenService.validate("id-token")).thenReturn(new AuthenticatedUser("uid-2", "user@example.invalid"));
 
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
         request.addHeader("Authorization", "bearer id-token");
@@ -92,7 +92,7 @@ class FirebaseAuthenticationFilterTest {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication).isNotNull();
-        assertThat(authentication.getPrincipal()).isEqualTo(new FirebaseIdentity("uid-2", "user@example.invalid"));
+        assertThat(authentication.getPrincipal()).isEqualTo(new AuthenticatedUser("uid-2", "user@example.invalid"));
         verify(tokenService).validate("id-token");
     }
 

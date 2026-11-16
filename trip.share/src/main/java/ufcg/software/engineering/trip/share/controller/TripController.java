@@ -19,7 +19,7 @@ import ufcg.software.engineering.trip.share.dto.CreateTripRequest;
 import ufcg.software.engineering.trip.share.dto.TripDeletePreview;
 import ufcg.software.engineering.trip.share.dto.TripResponse;
 import ufcg.software.engineering.trip.share.dto.UpdateTripRequest;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.TripService;
 
 @RestController
@@ -33,14 +33,14 @@ public class TripController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TripResponse createTrip(@AuthenticationPrincipal FirebaseIdentity identity,
+    public TripResponse createTrip(@AuthenticationPrincipal AuthenticatedUser identity,
                                    @Valid @RequestBody CreateTripRequest request) {
         return tripService.createTrip(request, identity);
     }
 
     @PatchMapping("/{id}")
     public TripResponse updateTrip(@PathVariable UUID id,
-                                   @AuthenticationPrincipal FirebaseIdentity identity,
+                                   @AuthenticationPrincipal AuthenticatedUser identity,
                                    @Valid @RequestBody UpdateTripRequest request) {
         return tripService.updateTrip(id, request, identity);
     }
@@ -49,14 +49,14 @@ public class TripController {
     public TripDeletePreview previewDeletion(@PathVariable UUID id,
                                              @RequestParam(defaultValue = "0") int page,
                                              @RequestParam(defaultValue = "20") int size,
-                                             @AuthenticationPrincipal FirebaseIdentity identity) {
+                                             @AuthenticationPrincipal AuthenticatedUser identity) {
         return tripService.previewDeletion(id, identity, page, size);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteTrip(@PathVariable UUID id, @RequestParam(required = false) String confirm,
-                           @AuthenticationPrincipal FirebaseIdentity identity) {
+                           @AuthenticationPrincipal AuthenticatedUser identity) {
         tripService.deleteTrip(id, identity, "true".equals(confirm));
     }
 }

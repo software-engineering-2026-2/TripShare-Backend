@@ -25,7 +25,7 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public UserResponse login(LoginRequest request, FirebaseIdentity identity) {
+    public UserResponse login(LoginRequest request, AuthenticatedUser identity) {
         requireSameUid(request.uuid(), identity);
         User user = userRepository.findByAuthUuid(identity.uid())
                 .orElseThrow(() -> new AuthException(USER_NOT_FOUND));
@@ -36,7 +36,7 @@ public class AuthService {
     }
 
     @Transactional
-    public UserResponse register(RegisterRequest request, FirebaseIdentity identity) {
+    public UserResponse register(RegisterRequest request, AuthenticatedUser identity) {
         requireSameUid(request.uuid(), identity);
         if (!validator.validate(new EmailClaim(identity.email())).isEmpty()) {
             throw new AuthException(INVALID_EMAIL);
@@ -53,7 +53,7 @@ public class AuthService {
         return UserResponse.from(userRepository.saveAndFlush(user));
     }
 
-    private void requireSameUid(String uuid, FirebaseIdentity identity) {
+    private void requireSameUid(String uuid, AuthenticatedUser identity) {
         if (!uuid.equals(identity.uid())) {
             throw new AuthException(UID_MISMATCH);
         }
