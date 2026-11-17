@@ -138,6 +138,10 @@ Consulte a [modelagem, diagrama e matriz RF-01–RF-32](docs/database.md) e o
 
 ## API
 
+A referência completa das rotas de viagens está em [docs/api/README.md](docs/api/README.md),
+com [convenções compartilhadas](docs/api/conventions.md), uma página por operação e
+o [contrato OpenAPI](docs/openapi.yaml). Consulte essas páginas antes de integrar ou alterar as rotas.
+
 O frontend cadastra/autentica a conta no Firebase e obtém o **ID token**. A API local responde em
 `http://localhost:8080`; em ambiente publicado, envie os tokens por HTTPS. O UID Firebase é uma string
 opaca, armazenada em `auth.uuid`; os IDs internos de `auth` e `users` são UUIDs distintos.

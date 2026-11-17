@@ -119,6 +119,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Reference modified files using clear paths.
 - Suggest next steps only when they are useful.
 
+### API Documentation
+
+- When adding, changing, or removing an API route, update `docs/openapi.yaml` and the corresponding route documentation under `docs/api/` in the same change.
+- Document the implemented behavior, including inputs, responses, authentication, authorization, validation, business rules, errors, and side effects.
+- Keep examples and references to implementation and tests consistent with the code.
+- Update `docs/api/README.md` when adding, renaming, or removing a route.
+- Internal refactoring that does not change documented behavior does not require documentation changes.
+
 ## Skills
 
 - At the start of every task, inspect the skills available in
