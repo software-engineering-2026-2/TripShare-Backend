@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: TripShare — Gerenciamento de viagens
+  version: '1.0'
+  description: Edição e exclusão de viagens pelo proprietário (RF-06).
+security:
+  - firebaseBearer: []
+paths:
+  /trips/{id}:
+    parameters:
+      - $ref: '#/components/parameters/tripId'
+    patch:
+      operationId: updateTrip
+      summary: Atualiza os campos informados da viagem.
+      description: |
+        Os dias são numerados a partir de 1. Em viagens com datas fixas, alterar apenas a duração
+        ajusta a data final. Em viagens sem datas, informe ambas para definir o período.
+        A duração informada junto com datas deve corresponder ao intervalo inclusivo.
+        Ao encurtar a viagem, envie uma resolução por dia conflitante após receber 409.
+        A alteração do período e as resoluções são gravadas em uma única transação.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: {type: string, maxLength: 120, pattern: '.*\S.*'}
+                destinationId: {type: string, format: uuid}
+                startsOn: {type: string, format: date}
+                endsOn: {type: string, format: date}
+                durationDays: {type: integer, minimum: 1}
+                resolutions:
+                  type: array
+                  items:
+                    oneOf:
+                      - type: object
+                        required: [dayNumber, action, targetDay]
+                        properties:
+                          dayNumber: {type: integer, minimum: 1}
+                          action: {type: string, enum: [MOVE]}
+                          targetDay: {type: integer, minimum: 1, description: Dia mantido no novo período.}
+                      - type: object
+                        additionalProperties: false
+                        required: [dayNumber, action]
+                        properties:
+                          dayNumber: {type: integer, minimum: 1}
+                          action: {type: string, enum: [REMOVE]}
+            examples:
+              reduzir:
+                value: {durationDays: 3}
+              resolver:
+                value:
+                  durationDays: 3
+                  resolutions:
+                    - {dayNumber: 4, action: MOVE, targetDay: 2}
+                    - {dayNumber: 5, action: REMOVE}
+      responses:
+        '200':
+          description: Viagem atualizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Trip'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: O novo período exige resolver atividades ou a remoção inviabilizaria uma publicação.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      conflicts:
+                        type: array
+                        items:
+                          type: object
+                          required: [dayNumber, activityCount]
+                          properties:
+                            dayNumber: {type: integer}
+                            activityCount: {type: integer, format: int64}
+              examples:
+                diasExcedentes:
+                  value:
+                    status: 409
+                    message: 'Cannot shorten trip: activities exist on days outside the new period'
+                    conflicts:
+                      - {dayNumber: 4, activityCount: 2}
+                      - {dayNumber: 5, activityCount: 1}
+                publicacao:
+                  value: {status: 409, message: A public itinerary needs an activity with an identified location}
+    delete:
+      operationId: deleteTrip
+      summary: Exclui a viagem inteira e seus dependentes após confirmação.
+      description: |
+        Envie DELETE /trips/{id}?confirm=true para confirmar. A exclusão abrange todos os roteiros,
+        inclusive os de outras páginas da prévia. Para cancelar, encerre a consulta à prévia.
+      parameters:
+        - name: confirm
+          in: query
+          required: true
+          description: A confirmação exige o valor literal true.
+          schema: {type: string, enum: ['true']}
+          example: 'true'
+      responses:
+        '204': {description: Viagem e vínculos excluídos na mesma transação.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /trips/{id}/delete-preview:
+    parameters:
+      - $ref: '#/components/parameters/tripId'
+    get:
+      operationId: previewTripDeletion
+      summary: Lista os roteiros e vínculos afetados pela exclusão.
+      description: Ordenação crescente por título e UUID. A consulta inclui os roteiros privados da viagem.
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, format: int32, minimum: 0, default: 0}
+        - name: size
+          in: query
+          description: Valores maiores que 100 são aceitos e ajustados para 100.
+          schema: {type: integer, format: int32, minimum: 1, default: 20}
+      responses:
+        '200':
+          description: A página solicitada e os totais da viagem. Páginas sem resultados têm conteúdo vazio.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletePreview'
+              example:
+                content:
+                  - id: 60000000-0000-0000-0000-000000000001
+                    title: Roteiro de museus
+                    published: true
+                    favoriteCount: 2
+                    inRanking: true
+                page: 0
+                size: 20
+                totalElements: 1
+                totalPages: 1
+                last: true
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    firebaseBearer: {type: http, scheme: bearer, bearerFormat: Firebase ID token}
+  parameters:
+    tripId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    BadRequest:
+      description: Parâmetros, período, resoluções ou confirmação inválidos.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Token Firebase ausente ou inválido.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Perfil suspenso ou viagem de outro proprietário.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Viagem, perfil ou destino informado na edição inexistente.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [status, message]
+      properties:
+        status: {type: integer}
+        message: {type: string}
+    DeletePreview:
+      type: object
+      required: [content, page, size, totalElements, totalPages, last]
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+            required: [id, title, published, favoriteCount, inRanking]
+            properties:
+              id: {type: string, format: uuid}
+              title: {type: string}
+              published: {type: boolean, description: Indica que a visibilidade do roteiro é pública.}
+              favoriteCount: {type: integer, format: int64, minimum: 0}
+              inRanking: {type: boolean, description: Indica presença no ranking público atual.}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, format: int64, minimum: 0}
+        last: {type: boolean}
+    Trip:
+      type: object
+      required: [id, userId, destinationId, destinationName, destinationRegion, destinationCountryCode, title, startsOn, endsOn, durationDays, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        destinationId: {type: string, format: uuid}
+        destinationName: {type: string}
+        destinationRegion: {type: string, nullable: true}
+        destinationCountryCode: {type: string}
+        title: {type: string}
+        startsOn: {type: string, format: date, nullable: true}
+        endsOn: {type: string, format: date, nullable: true}
+        durationDays: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}

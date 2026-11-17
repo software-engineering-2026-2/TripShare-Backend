@@ -1,6 +1,7 @@
 package ufcg.software.engineering.trip.share.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -14,5 +15,5 @@ public record UpdateTripRequest(
         LocalDate startsOn,
         LocalDate endsOn,
         @Positive Integer durationDays,
-        @Valid List<DayResolution> resolutions
+        List<@Valid @NotNull DayResolution> resolutions
 ) {}

@@ -23,7 +23,7 @@ import ufcg.software.engineering.trip.share.models.Destination;
 import ufcg.software.engineering.trip.share.models.Place;
 import ufcg.software.engineering.trip.share.repository.DestinationRepository;
 import ufcg.software.engineering.trip.share.repository.PlaceRepository;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -48,11 +48,11 @@ class TripPlacesApiTest {
         jdbc.update("DELETE FROM auth");
 
         when(tokenService.validate("valid-token"))
-                .thenReturn(new FirebaseIdentity("firebase-uid", "user@example.invalid"));
+                .thenReturn(new AuthenticatedUser("firebase-uid", "user@example.invalid"));
         when(tokenService.validate("other-token"))
-                .thenReturn(new FirebaseIdentity("other-uid", "other@example.invalid"));
+                .thenReturn(new AuthenticatedUser("other-uid", "other@example.invalid"));
         when(tokenService.validate("suspended-token"))
-                .thenReturn(new FirebaseIdentity("suspended-uid", "suspended@example.invalid"));
+                .thenReturn(new AuthenticatedUser("suspended-uid", "suspended@example.invalid"));
 
         register("valid-token", "firebase-uid", "traveler");
         register("other-token", "other-uid", "other");

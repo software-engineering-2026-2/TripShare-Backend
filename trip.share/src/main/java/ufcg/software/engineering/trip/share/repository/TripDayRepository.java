@@ -52,5 +52,9 @@ public interface TripDayRepository extends JpaRepository<TripDay, UUID> {
     @Query(value = "DELETE FROM itinerary_activities WHERE trip_day_id = :dayId", nativeQuery = true)
     int deleteActivitiesByDay(@Param("dayId") UUID dayId);
 
+    @Modifying
+    @Query(value = "SET CONSTRAINTS trg_activities_public_activity IMMEDIATE", nativeQuery = true)
+    void checkPublicActivityConstraint();
+
     Optional<TripDay> findByTripIdAndDayNumber(UUID tripId, int dayNumber);
 }

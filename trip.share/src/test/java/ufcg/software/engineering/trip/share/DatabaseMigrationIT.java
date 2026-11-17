@@ -250,7 +250,7 @@ class DatabaseMigrationIT {
         seed();
         rejected("UPDATE itinerary_activities SET trip_day_id = '50000000-0000-0000-0000-000000000004' WHERE id = '70000000-0000-0000-0000-000000000001'");
         rejected("INSERT INTO trip_days(trip_id, day_number) VALUES ('" + TRIP + "',4)");
-        rejected("UPDATE trips SET ends_on = starts_on + 1 WHERE id = '" + TRIP + "'");
+        rejected("UPDATE trips SET ends_on = starts_on + 1, duration_days = 2 WHERE id = '" + TRIP + "'");
         rejected("UPDATE trip_days SET trip_id = '40000000-0000-0000-0000-000000000002' WHERE id = '50000000-0000-0000-0000-000000000001'");
         // Warnings require application acknowledgement; overlapping times themselves are permitted.
         execute("UPDATE itinerary_activities SET starts_at = '10:30' WHERE id = '70000000-0000-0000-0000-000000000002'");

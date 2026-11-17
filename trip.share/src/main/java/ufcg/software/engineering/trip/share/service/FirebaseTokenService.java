@@ -17,10 +17,10 @@ public class FirebaseTokenService {
         this.firebaseAuth = firebaseAuth;
     }
 
-    public FirebaseIdentity validate(String idToken) {
+    public AuthenticatedUser validate(String idToken) {
         try {
             FirebaseToken token = firebaseAuth.verifyIdToken(idToken);
-            return new FirebaseIdentity(token.getUid(), token.getEmail());
+            return new AuthenticatedUser(token.getUid(), token.getEmail());
         } catch (FirebaseAuthException exception) {
             var code = exception.getAuthErrorCode();
             if (code != null && Set.of(INVALID_ID_TOKEN, EXPIRED_ID_TOKEN, REVOKED_ID_TOKEN,

@@ -28,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import ufcg.software.engineering.trip.share.dto.RegisterRequest;
 import ufcg.software.engineering.trip.share.service.AuthService;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 @SpringBootTest
@@ -78,11 +78,11 @@ class AuthPostgresIT {
         var barrier = new CyclicBarrier(2);
         when(tokenService.validate("one")).thenAnswer(invocation -> {
             barrier.await(15, TimeUnit.SECONDS);
-            return new FirebaseIdentity("uid-one", "one@example.invalid");
+            return new AuthenticatedUser("uid-one", "one@example.invalid");
         });
         when(tokenService.validate("two")).thenAnswer(invocation -> {
             barrier.await(15, TimeUnit.SECONDS);
-            return new FirebaseIdentity(secondUid, secondEmail);
+            return new AuthenticatedUser(secondUid, secondEmail);
         });
         var executor = Executors.newFixedThreadPool(2);
         try {
@@ -103,7 +103,7 @@ class AuthPostgresIT {
     void register_userInsertFailure_shouldRollBackAuthInsert() {
         // Bypass HTTP validation to exercise transaction rollback after auth has been persisted.
         var request = new RegisterRequest("uid-one", "x".repeat(51), "Test", null, null, null);
-        assertThatThrownBy(() -> service.register(request, new FirebaseIdentity("uid-one", "one@example.invalid")))
+        assertThatThrownBy(() -> service.register(request, new AuthenticatedUser("uid-one", "one@example.invalid")))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM auth", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Integer.class)).isZero();
@@ -111,7 +111,7 @@ class AuthPostgresIT {
 
     @Test
     void registerAndLogin_postgresMappings_shouldReturnSameUser() throws Exception {
-        when(tokenService.validate("one")).thenReturn(new FirebaseIdentity("firebase-uid", "one@example.invalid"));
+        when(tokenService.validate("one")).thenReturn(new AuthenticatedUser("firebase-uid", "one@example.invalid"));
         assertThat(register("one", "firebase-uid", "traveler")).isEqualTo(201);
         var response = mvc.perform(post("/auth/login").header("Authorization", "Bearer one")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"uuid\":\"firebase-uid\"}"))

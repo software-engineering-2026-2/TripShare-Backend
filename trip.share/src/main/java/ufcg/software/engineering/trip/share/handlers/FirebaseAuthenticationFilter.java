@@ -12,7 +12,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.json.JsonMapper;
-import ufcg.software.engineering.trip.share.service.FirebaseIdentity;
+import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
@@ -33,7 +33,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             SecurityErrors.write(mapper, response, 401, "Firebase Bearer token is required");
             return;
         }
-        FirebaseIdentity identity;
+        AuthenticatedUser identity;
         try {
             identity = tokenService.validate(header.substring(7).trim());
         } catch (BadCredentialsException exception) {
