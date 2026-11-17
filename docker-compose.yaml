@@ -1,0 +1,66 @@
+services:
+
+  spring:
+    profiles: ["app"]
+    build:
+      context: .
+      target: runtime
+    container_name: ${SPRING_CONTAINER_NAME:-spring-app}
+    ports:
+      - "${SPRING_PORT:-8080}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      FIREBASE_KEY_PATH: ${FIREBASE_KEY_PATH:-file:/run/secrets/firebase.json}
+    volumes:
+      - type: bind
+        source: ${FIREBASE_CREDENTIALS_FILE:-./.secrets/firebase.json}
+        target: /run/secrets/firebase.json
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    profiles: ["tools", "app"]
+    build:
+      context: .
+      target: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
+      FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      FLYWAY_IGNORE_MIGRATION_PATTERNS: ""
+    volumes:
+      - ./trip.share/src/main/resources/db/migration:/app/src/main/resources/db/migration:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      org.springframework.boot.ignore: "true"
+
+  postgres:
+  
+    image: postgres:16
+    container_name: ${POSTGRES_CONTAINER_NAME:-spring-db}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

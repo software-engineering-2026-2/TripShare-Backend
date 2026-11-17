@@ -9,7 +9,7 @@
 .settings
 .springBeans
 .sts4-cache
-
+.idea
 
 # Created by https://www.gitignore.io/api/git,java,maven,eclipse,windows
 
@@ -199,3 +199,15 @@ README.html
 *.iml
 .idea
 .exercism
+
+# Local database credentials and backups
+.env
+.env.*
+!.env.example
+.old/
+
+/trip.share/src/main/resources/firebase/tripshare-firebase-key.json
+.secrets/
+**/firebase*.json
+**/*firebase*key*.json
+**/*service*account*.json
