@@ -26,7 +26,7 @@ import ufcg.software.engineering.trip.share.repository.PlaceRepository;
 import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:trip-places-api;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class TripPlacesApiTest {

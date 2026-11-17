@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:auth-api;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AuthApiTest {
