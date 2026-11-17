@@ -79,6 +79,55 @@ Para validar o esquema e migrations em PostgreSQL 16 real (Docker obrigatório):
 ./mvnw verify -Pdatabase-it
 ```
 
+## Continuous Integration
+
+The [Backend CI workflow](.github/workflows/ci.yml) runs on every push, every pull request,
+and manual dispatch. It uses Ubuntu 24.04, Eclipse Temurin Java 17, the project's Maven Wrapper,
+and Maven dependency caching. Each job has a 30-minute timeout.
+
+| Check | Validation | Artifact |
+| --- | --- | --- |
+| **Build** | Compiles and packages the executable JAR, then builds the Dockerfile's `runtime` image. The Dockerfile also runs its existing tests. | `backend-jar` |
+| **Database Validation** | Runs `DatabaseMigrationIT` against disposable PostgreSQL 16 containers, covering migrations, checksums, upgrades, rollback, seeds, constraints, cascades, and public views. | `database-validation-reports` |
+| **Full Test Suite** | Runs all Surefire tests and all Failsafe integration tests through the `database-it` profile, including the database migration suite. | `full-test-reports` |
+
+The checks run independently. A failed command fails its check; missing Docker is an error,
+not a reason to skip integration tests. Database tests intentionally run in both their dedicated
+check and the full suite. No Firebase or Foursquare credentials are required: tests use mocks,
+local fixtures, and disposable databases.
+
+Test reports are uploaded even when tests fail, provided Maven created them. Artifacts are
+available on the workflow run page for 14 days. The JAR is uploaded after packaging, so it may
+be available even if the subsequent Docker build fails; its presence alone does not indicate
+that all checks passed. The Docker image is built locally on the runner and is not published.
+
+New runs cancel outdated runs for the same event and Git reference. Push and pull-request
+runs remain separate, so pushing to a branch with an open PR can trigger both.
+
+To reproduce the checks locally, use Java 17 and start Docker. Run the Maven commands from
+`trip.share/`, one at a time because they share the `target/` directory:
+
+```bash
+# Build the executable JAR.
+./mvnw -B -ntp clean package -DskipTests
+
+# Validate database migrations and integrity.
+./mvnw -B -ntp -Pdatabase-it -Dit.test=DatabaseMigrationIT \
+  clean test-compile failsafe:integration-test failsafe:verify
+
+# Run all tests, including PostgreSQL integration tests.
+./mvnw -B -ntp clean verify -Pdatabase-it -DfailIfNoTests=true
+```
+
+Run the Docker build from the repository root:
+
+```bash
+docker build --target runtime --tag tripshare-backend:ci .
+```
+
+Validate workflow changes with `actionlint` from the repository root. The workflow reports
+check results; repository branch-protection settings determine whether they are required to merge.
+
 ## Banco de dados e migrations
 
 Dentro de `trip.share/`, use:

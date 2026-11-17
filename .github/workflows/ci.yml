@@ -1,0 +1,122 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: trip.share
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: trip.share/pom.xml
+
+      - name: Build executable JAR
+        run: ./mvnw -B -ntp clean package -DskipTests
+
+      - name: Upload executable JAR
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-jar
+          path: trip.share/target/*.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build Docker runtime image
+        working-directory: .
+        run: docker build --target runtime --tag tripshare-backend:ci .
+
+  database-validation:
+    name: Database Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: trip.share/pom.xml
+
+      - name: Check Docker availability
+        run: docker info
+
+      - name: Validate database migrations and integrity
+        run: >-
+          ./mvnw -B -ntp -Pdatabase-it -Dit.test=DatabaseMigrationIT
+          clean test-compile failsafe:integration-test failsafe:verify
+
+      - name: Upload database validation reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: database-validation-reports
+          path: trip.share/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  full-test-suite:
+    name: Full Test Suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: trip.share/pom.xml
+
+      - name: Check Docker availability
+        run: docker info
+
+      - name: Run all tests
+        run: ./mvnw -B -ntp clean verify -Pdatabase-it -DfailIfNoTests=true
+
+      - name: Upload full test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: full-test-reports
+          path: |
+            trip.share/target/surefire-reports/
+            trip.share/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 14
