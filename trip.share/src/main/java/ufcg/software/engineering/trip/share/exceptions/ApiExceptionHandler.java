@@ -5,6 +5,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -12,6 +14,16 @@ import ufcg.software.engineering.trip.share.dto.ErrorResponse;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> invalidFirebaseCredential(BadCredentialsException exception) {
+        return error(HttpStatus.UNAUTHORIZED, "Invalid Firebase token");
+    }
+
+    @ExceptionHandler(AuthenticationServiceException.class)
+    public ResponseEntity<ErrorResponse> firebaseUnavailable(AuthenticationServiceException exception) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "Firebase authentication unavailable");
+    }
+
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<ErrorResponse> authentication(AuthException exception) {
         return switch (exception.reason()) {
