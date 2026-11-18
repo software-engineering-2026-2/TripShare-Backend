@@ -2,10 +2,140 @@ openapi: 3.0.3
 info:
   title: TripShare — Gerenciamento de viagens
   version: '1.0'
-  description: Edição e exclusão de viagens pelo proprietário (RF-06).
+  description: |
+    Gerenciamento de viagens. As rotas protegidas usam Firebase Session Cookie HttpOnly.
+    Login e cadastro recebem Bearer ID token para criar a sessão. O cookie padrão é
+    tripshare_session; durante a migração, o servidor também pode aceitar Bearer por configuração.
 security:
-  - firebaseBearer: []
+  - firebaseSessionCookie: []
 paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Autentica o perfil Firebase e cria a sessão HttpOnly.
+      security:
+        - firebaseBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid]
+              properties:
+                uuid: {type: string, maxLength: 128}
+      responses:
+        '200':
+          description: Perfil existente; corpo de usuário preservado.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/sessionCookie'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/register:
+    post:
+      operationId: register
+      summary: Cria perfil local e cria a sessão HttpOnly.
+      security:
+        - firebaseBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid, username, name]
+              properties:
+                uuid: {type: string, maxLength: 128}
+                username: {type: string, maxLength: 50}
+                name: {type: string, maxLength: 120}
+                phone: {type: string, nullable: true, maxLength: 32}
+                bio: {type: string, nullable: true}
+                hometown: {type: string, nullable: true}
+      responses:
+        '201':
+          description: Perfil criado; corpo de usuário preservado.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/sessionCookie'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409':
+          description: UID, e-mail ou username já cadastrado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Encerra a sessão e expira o cookie.
+      description: |
+        O cookie é opcional. A sessão válida tem seus refresh tokens revogados no Firebase.
+        Sem cookie ou com cookie inválido, a operação continua idempotente e retorna 204.
+      security: []
+      parameters:
+        - name: tripshare_session
+          in: cookie
+          required: false
+          schema: {type: string}
+          description: Nome padrão; configurável por APP_AUTH_COOKIE_NAME.
+      responses:
+        '204':
+          description: Cookie expirado; nenhum corpo.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/expiredSessionCookie'
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /users/{id}:
+    get:
+      operationId: getPublicUserProfile
+      summary: Consulta as informações públicas de um perfil.
+      description: O identificador é o UUID interno do usuário. A rota exige autenticação.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Perfil público encontrado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPublic'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /users/me:
+    patch:
+      operationId: updateCurrentUserProfile
+      summary: Atualiza os campos informados do perfil autenticado.
+      description: Campos omitidos ou nulos não são alterados.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Perfil atualizado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /trips/{id}:
     parameters:
       - $ref: '#/components/parameters/tripId'
@@ -152,6 +282,18 @@ paths:
 components:
   securitySchemes:
     firebaseBearer: {type: http, scheme: bearer, bearerFormat: Firebase ID token}
+    firebaseSessionCookie:
+      type: apiKey
+      in: cookie
+      name: tripshare_session
+      description: Cookie padrão; nome e atributos são configuráveis no backend.
+  headers:
+    sessionCookie:
+      description: Firebase Session Cookie HttpOnly; o browser deve armazená-lo automaticamente.
+      schema: {type: string}
+    expiredSessionCookie:
+      description: Mesmo cookie com Path e atributos originais e Max-Age=0.
+      schema: {type: string}
   parameters:
     tripId:
       name: id
@@ -165,7 +307,7 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
     Unauthorized:
-      description: Token Firebase ausente ou inválido.
+      description: Cookie de sessão ausente/inválido ou token Firebase inválido.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -176,6 +318,11 @@ components:
           schema: {$ref: '#/components/schemas/Error'}
     NotFound:
       description: Viagem, perfil ou destino informado na edição inexistente.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Firebase ou banco de dados indisponível.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -222,3 +369,35 @@ components:
         durationDays: {type: integer}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    User:
+      type: object
+      description: Resposta atual de perfil; o Session Cookie é entregue somente por Set-Cookie.
+      properties:
+        id: {type: string, format: uuid}
+        authId: {type: string, format: uuid}
+        uuid: {type: string}
+        username: {type: string}
+        name: {type: string}
+        email: {type: string, format: email}
+        phone: {type: string, nullable: true}
+        bio: {type: string, nullable: true}
+        hometown: {type: string, nullable: true}
+        role: {type: string}
+        status: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    UserPublic:
+      type: object
+      required: [username, name]
+      properties:
+        username: {type: string}
+        name: {type: string}
+        bio: {type: string, nullable: true}
+        hometown: {type: string, nullable: true}
+    UpdateUserRequest:
+      type: object
+      properties:
+        name: {type: string, maxLength: 120, pattern: '.*\S.*'}
+        phone: {type: string, maxLength: 32, pattern: '^\+[1-9]\d{1,14}$'}
+        bio: {type: string, maxLength: 500}
+        hometown: {type: string, maxLength: 120}
