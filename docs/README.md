@@ -11,6 +11,7 @@ Use this index to find the documentation relevant to your task before planning o
 | [Data dictionary](database-dictionary.md) | A table-by-table schema reference for PostgreSQL migrations V1–V7, including column types, nullability, defaults, generated expressions, constraints, and additional indexes. | When inspecting exact storage definitions or checking entity mappings and SQL changes. The dictionary identifies versioned SQL as the source of truth for the schema. |
 | [Autenticação](auth.md) | Fluxo de login com Firebase e Spring Security, validação do token e consulta ao perfil no PostgreSQL. | Para entender como o backend autentica requisições ou investigar erros de login. |
 | [OpenAPI da RF-06](openapi.yaml) | Edição de viagem, prévia paginada e exclusão confirmada. | Ao integrar ou testar essas rotas. |
+| [Documentação da API](api/README.md) | Autenticação por cookie, convenções, operações de login/cadastro/logout e migração do frontend. | Ao integrar endpoints ou migrar chamadas autenticadas para Firebase Session Cookie. |
 
 ## Related repository documentation
 

@@ -139,12 +139,19 @@ Consulte a [modelagem, diagrama e matriz RF-01–RF-32](docs/database.md) e o
 ## API
 
 O frontend cadastra/autentica a conta no Firebase e obtém o **ID token**. A API local responde em
-`http://localhost:8080`; em ambiente publicado, envie os tokens por HTTPS. O UID Firebase é uma string
+`http://localhost:8080`; em ambiente publicado, use HTTPS. O UID Firebase é uma string
 opaca, armazenada em `auth.uuid`; os IDs internos de `auth` e `users` são UUIDs distintos.
 
-Todos os endpoints exigem `Authorization: Bearer <firebase-id-token>`. O backend verifica o token.
-No cadastro e no login, também exige igualdade exata entre o UID verificado e `uuid` no corpo. Não há
-senha nem emissão de token no backend.
+`POST /auth/register` e `POST /auth/login` recebem `Authorization: Bearer <firebase-id-token>` somente
+para validar a identidade inicial. Em caso de sucesso, o backend cria um Firebase Session Cookie e o
+envia em `Set-Cookie` com `HttpOnly`; o token não é incluído no corpo. O navegador deve enviar esse
+cookie automaticamente nas chamadas seguintes (`credentials: 'include'` no `fetch` ou
+`withCredentials: true` no Axios). O frontend não deve guardar o ID token no `SessionStorage`.
+
+O UID autenticado deve continuar igual ao campo `uuid` enviado no cadastro e no login. Durante a
+migração, o backend aceita Bearer nas demais rotas somente quando
+`APP_AUTH_BEARER_FALLBACK_ENABLED=true` (padrão temporário: `true`); desligue essa opção após a migração.
+Não há JWT próprio nem senha/token armazenado no banco.
 
 ### Endpoints disponíveis
 
@@ -152,10 +159,11 @@ senha nem emissão de token no backend.
 |--------|---------|--------------|-----------|
 | `POST` | `/auth/register` | Firebase ID token | Cria o perfil local associado à conta Firebase. Retorna `201`. |
 | `POST` | `/auth/login` | Firebase ID token | Busca o perfil existente associado ao UID Firebase. Retorna `200`. |
-| `GET` | `/users/{id}` | Firebase ID token | Retorna informações públicas do perfil identificado por `id`. |
-| `PATCH` | `/users/me` | Firebase ID token | Atualiza campos do perfil do usuário autenticado. |
-| `POST` | `/trips` | Firebase ID token | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
-| `PATCH` | `/trips/{id}` | Firebase ID token | Atualiza campos da viagem do usuário autenticado (título, destino, datas ou duração). Retorna `200`. |
+| `POST` | `/auth/logout` | Cookie opcional | Revoga refresh tokens quando válido e expira o cookie. Retorna `204`. |
+| `GET` | `/users/{id}` | Cookie de sessão | Retorna informações públicas do perfil identificado por `id`. |
+| `PATCH` | `/users/me` | Cookie de sessão | Atualiza campos do perfil do usuário autenticado. |
+| `POST` | `/trips` | Cookie de sessão | Cria uma viagem vinculada ao usuário autenticado. Retorna `201`. |
+| `PATCH` | `/trips/{id}` | Cookie de sessão | Atualiza campos da viagem do usuário autenticado. Retorna `200`. |
 
 ### Cadastro de perfil
 
@@ -179,7 +187,7 @@ válido, com até 254 caracteres. Papéis e status enviados pelo cliente não al
 
 Retorna `201` com o corpo de resposta de usuário abaixo. UID, email ou username já cadastrado retorna
 `409`; email e username são únicos sem diferenciar maiúsculas de minúsculas. `auth` e perfil são criados
-na mesma transação.
+na mesma transação. A resposta também inclui `Set-Cookie` com Firebase Session Cookie HttpOnly.
 
 ### Login
 
@@ -189,9 +197,31 @@ na mesma transação.
 {"uuid":"uid-retornado-pelo-firebase"}
 ```
 
-Retorna `200` com o perfil existente no formato de resposta abaixo. Perfil ausente retorna `404`; o
+Retorna `200` com o perfil existente no formato de resposta abaixo e inclui `Set-Cookie` com o cookie
+HttpOnly. Perfil ausente retorna `404`; o
 frontend deve realizar o cadastro separado. Perfil suspenso retorna `403`. O login não cadastra nem
 altera dados automaticamente.
+
+### Logout
+
+`POST /auth/logout` expira o cookie (`Path=/`, mesmos atributos e `Max-Age=0`) e revoga os refresh
+tokens do UID quando o cookie é válido. Sem cookie ou com cookie inválido, também retorna `204`.
+
+### Configuração de sessão
+
+| Variável | Padrão local | Finalidade |
+|---|---|---|
+| `APP_AUTH_COOKIE_NAME` | `tripshare_session` | Nome do cookie |
+| `APP_AUTH_COOKIE_MAX_AGE` | `5d` | Validade; Firebase aceita 5 minutos a 14 dias |
+| `APP_AUTH_COOKIE_SECURE` | `false` local; `true` no profile `prod` | Exige HTTPS |
+| `APP_AUTH_COOKIE_SAME_SITE` | `Lax` | `Lax`, `Strict` ou `None`; `None` exige Secure |
+| `APP_AUTH_COOKIE_DOMAIN` | vazio | Domain opcional |
+| `APP_AUTH_COOKIE_CHECK_REVOKED` | `true` | Verifica revogação da sessão |
+| `APP_AUTH_BEARER_FALLBACK_ENABLED` | `true` | Aceita Bearer temporariamente nas rotas protegidas |
+
+Em produção, ative o profile `prod` e use HTTPS. Se frontend e API estiverem em sites diferentes,
+configure `SameSite=None` e `Secure=true`. Consulte
+[`docs/api/frontend-cookie-migration.md`](docs/api/frontend-cookie-migration.md) para o contrato do frontend.
 
 Cadastro e login retornam o mesmo formato:
 
@@ -217,7 +247,7 @@ Cadastro e login retornam o mesmo formato:
 
 `GET /users/{id}` recebe o UUID interno do usuário (`id`) no parâmetro `id` e retorna `username`, `name`, `bio` e
 `hometown`. Perfil inexistente retorna `404`; perfil suspenso retorna `403` (`User is suspended`).
-Este endpoint exige `Authorization: Bearer <firebase-id-token>`.
+Este endpoint exige o Firebase Session Cookie após login; o fallback Bearer fica ativo apenas durante a migração.
 
 Exemplo de resposta (`200`):
 
@@ -385,6 +415,7 @@ correspondentes: `400` para corpo inválido, `401` para token ausente/inválido/
 `403` para suspensão, `404` para perfil ausente e `409` para duplicidade. Indisponibilidade de Firebase
 ou banco retorna `503`; outras violações de integridade retornam `500`, sem expor detalhes internos.
 
-O filtro usa `FirebaseAuth.verifyIdToken`, que valida assinatura, expiração e projeto emissor. Essa
-verificação não consulta revogação remota a cada chamada. Renovação de token, recuperação de senha e
-logout são gerenciados pelo Firebase no frontend. O backend não armazena tokens ou senhas.
+O filtro usa `FirebaseAuth.verifyIdToken` no login/cadastro e `verifySessionCookie` nas rotas protegidas.
+`APP_AUTH_COOKIE_CHECK_REVOKED=true` solicita a verificação de revogação; logout também revoga refresh
+tokens. Renovação de identidade e recuperação de senha continuam no Firebase/frontend. O backend não
+armazena tokens ou senhas.
