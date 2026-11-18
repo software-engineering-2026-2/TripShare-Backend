@@ -23,6 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.BadCredentialsException;
 import tools.jackson.databind.json.JsonMapper;
 import ufcg.software.engineering.trip.share.handlers.FirebaseAuthenticationFilter;
+import ufcg.software.engineering.trip.share.config.AuthProperties;
 import ufcg.software.engineering.trip.share.service.AuthenticatedUser;
 import ufcg.software.engineering.trip.share.service.FirebaseTokenService;
 
@@ -38,7 +39,9 @@ class FirebaseAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new FirebaseAuthenticationFilter(tokenService, mapper);
+        filter = new FirebaseAuthenticationFilter(tokenService, mapper,
+                new AuthProperties(true, new AuthProperties.Cookie(
+                        "tripshare_session", java.time.Duration.ofDays(5), false, "Lax", null, true)));
         when(mapper.writeValueAsBytes(org.mockito.ArgumentMatchers.any())).thenReturn(new byte[0]);
     }
 
