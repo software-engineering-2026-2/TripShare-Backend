@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: TripShare — Gerenciamento de viagens
   version: '1.0'
-  description: Edição e exclusão de viagens pelo proprietário (RF-06).
+  description: Edição e exclusão de viagens pelo proprietário.
 security:
   - firebaseBearer: []
 paths:

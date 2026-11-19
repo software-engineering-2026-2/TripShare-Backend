@@ -6,11 +6,11 @@ Use this index to find the documentation relevant to your task before planning o
 
 | Document | Contents | When to read |
 | --- | --- | --- |
-| [Project specification](especificacao-do-projeto.md) | Product context, problems addressed, target users, proposed scope, domain terminology, initial functional requirements (`RF-001`–`RF-012`), proposed acceptance criteria, business rules, quality objectives, and open questions. | Before discussing product scope or changing user-facing behavior. This is an initial specification, not a record of implemented features. |
-| [Database guide](database.md) | PostgreSQL setup and connection configuration, database lifecycle commands, Flyway migrations and recovery, the Firebase transition, reference and demo seeds, integrity rules, deletion and privacy behavior, SQL query examples, database tests, an entity-relationship diagram, and a traceability matrix for `RF-01`–`RF-32` from the requirements document linked in the guide. | Before changing persistence, migrations, relationships, database constraints, queries, or database operations. |
+| [Project specification](especificacao-do-projeto.md) | Product context and project specification. | Before discussing product scope or changing user-facing behavior. |
+| [Database guide](database.md) | PostgreSQL setup and connection configuration, database lifecycle commands, Flyway migrations and recovery, the Firebase transition, reference and demo seeds, integrity rules, deletion and privacy behavior, database tests, an entity-relationship diagram, and a traceability matrix. | Before changing persistence, migrations, relationships, database constraints, queries, or database operations. |
 | [Data dictionary](database-dictionary.md) | A table-by-table schema reference for PostgreSQL migrations V1–V7, including column types, nullability, defaults, generated expressions, constraints, and additional indexes. | When inspecting exact storage definitions or checking entity mappings and SQL changes. The dictionary identifies versioned SQL as the source of truth for the schema. |
 | [Autenticação](auth.md) | Fluxo de login com Firebase e Spring Security, validação do token e consulta ao perfil no PostgreSQL. | Para entender como o backend autentica requisições ou investigar erros de login. |
-| [OpenAPI da RF-06](openapi.yaml) | Edição de viagem, prévia paginada e exclusão confirmada. | Ao integrar ou testar essas rotas. |
+| [OpenAPI](openapi.yaml) | Edição de viagem, prévia paginada e exclusão confirmada. | Ao integrar ou testar essas rotas. |
 
 ## Related repository documentation
 
@@ -23,8 +23,6 @@ Use this index to find the documentation relevant to your task before planning o
 ## Reading and interpreting the documentation
 
 - Start with the document that matches the task, then follow its relevant references. Read the database guide together with the data dictionary when changing persistence.
-- Keep requirement identifiers tied to their source document. The initial specification's `RF-001`–`RF-012` and the database guide's `RF-01`–`RF-32` are separate numbering schemes; do not assume that matching numbers describe the same requirement.
-- Treat proposed acceptance criteria and open questions in the initial specification as pending validation. Consult the technical documents for decisions already documented there.
 - Distinguish product goals, database support, and application behavior. A table or constraint does not by itself mean that a corresponding API or user flow is implemented.
 - If documents conflict with one another or with the code, report the discrepancy and resolve it before relying on the conflicting detail for a change.
 

@@ -108,7 +108,7 @@ docker compose exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POS
 Execute esse backup na raiz do repositório, com PostgreSQL iniciado e antes de iniciar a aplicação
 ou executar `database.sh migrate`. Os seeds usam UIDs fictícios e não habilitam login real.
 
-Consulte a [modelagem, diagrama e matriz RF-01–RF-32](docs/database.md) e o
+Consulte a [modelagem e diagrama](docs/database.md) e o
 [dicionário de dados](docs/database-dictionary.md). As entidades `Auth` e `User` atendem ao fluxo de autenticação.
 
 ## Estrutura do projeto
