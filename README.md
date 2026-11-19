@@ -108,8 +108,16 @@ docker compose exec -T postgres sh -c 'exec pg_dump -U "$POSTGRES_USER" -d "$POS
 Execute esse backup na raiz do repositório, com PostgreSQL iniciado e antes de iniciar a aplicação
 ou executar `database.sh migrate`. Os seeds usam UIDs fictícios e não habilitam login real.
 
-Consulte a [modelagem e diagrama](docs/database.md) e o
-[dicionário de dados](docs/database-dictionary.md). As entidades `Auth` e `User` atendem ao fluxo de autenticação.
+Consulte a [modelagem e diagrama](docs/database.md). As entidades `Auth` e `User` atendem ao fluxo de autenticação.
+
+## Documentação
+
+| Documento | Conteúdo |
+| --- | --- |
+| [Especificação do projeto](docs/especificacao-do-projeto.md) | 15 Requisitos Funcionais do Plano B (`RF-01`–`RF-05`, `RF-08`–`RF-17`). |
+| [Contrato da API (OpenAPI)](docs/openapi.yaml) | Contrato estruturado das rotas da API. |
+| [Autenticação](docs/auth.md) | Fluxo de login com Firebase Authentication e Spring Security. |
+| [Banco de dados](docs/database.md) | PostgreSQL, Flyway, seeds, integridade e diagrama ER. |
 
 ## Estrutura do projeto
 
@@ -131,9 +139,8 @@ Consulte a [modelagem e diagrama](docs/database.md) e o
     │   ├── application.properties
     │   ├── static/             # recursos estáticos
     │   └── templates/          # templates de view
-    ├── src/test/java/ufcg/software/engineering/trip/share/
-    │   └── ApplicationTests.java
-    └── HELP.md             # referência gerada pelo Spring Initializr
+    └── src/test/java/ufcg/software/engineering/trip/share/
+        └── ApplicationTests.java
 ```
 
 ## API

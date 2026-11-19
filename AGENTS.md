@@ -1,135 +1,51 @@
 # AGENTS.md
 
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+Instruções oficiais para qualquer agente de IA trabalhando no `TripShare-Backend`. Responda e escreva documentação em **português do Brasil**, preservando nomes de comandos, APIs, arquivos e identificadores técnicos.
 
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+## 0. Preflight (antes de começar qualquer tarefa)
 
-## Skills
+Antes de planejar ou editar qualquer arquivo, verifique se sua branch está sincronizada com `origin/development`:
+1. Rode `git fetch origin`.
+2. Verifique `git rev-list --count HEAD..origin/development`.
+3. Se o resultado for maior que `0`:
+   - Se `git status --porcelain` estiver limpo, avise o usuário e rode `git merge origin/development`.
+   - Se houver alterações locais não commitadas, **pare e avise o usuário** que `origin/development` avançou antes de continuar.
 
-- Before implementing, identify relevant skills in `.agents/skills/`.
-- Read the `SKILL.md` files for applicable skills and follow their instructions.
-- Use only skills compatible with the current stack and task.
+## 1. Fontes da Verdade (leia antes de codar)
 
-## 1. Think Before Coding
+| Arquivo | Quando ler |
+| --- | --- |
+| `docs/especificacao-do-projeto.md` | **Sempre** — contém os 15 Requisitos Funcionais do Plano B (`RF-01`–`RF-05`, `RF-08`–`RF-17`). |
+| `docs/openapi.yaml` | **Sempre** ao criar, alterar ou revisar qualquer endpoint ou DTO. |
+| `docs/auth.md` | Ao mexer em autenticação Firebase, Spring Security ou perfis. |
+| `docs/database.md` | Ao mexer em persistência, migrations Flyway, entidades JPA ou consultas. |
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+## 2. Regras Inegociáveis
 
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- **Contrato Único (`docs/openapi.yaml`):** TODA rota nova ou alterada deve corresponder exatamente a `docs/openapi.yaml`. Se uma mudança aprovada alterar caminho, método, payload, status HTTP ou erro, atualize `docs/openapi.yaml` no mesmo PR.
+- **Escopo Fechado (Plano B):** Implemente APENAS o que pertence aos 15 RFs de `docs/especificacao-do-projeto.md`. **NUNCA** implemente funcionalidades de comunidade (publicação pública, feed social, curtidas, comentários, avaliações, votos, ranking, favoritos, seguir usuários, cópia de roteiros, notificações, denúncias ou moderação).
+- **Simplicidade e Mudanças Cirúrgicas:** Escreva o mínimo de código necessário para resolver a tarefa. Não refatore código fora do escopo, não crie abstrações especulativas e preserve alterações já feitas pelo usuário.
+- **Não assuma — pergunte:** Se houver ambiguidade entre código, contrato e requisitos, pare e reporte antes de decidir sozinho.
 
-## 2. Simplicity First
+## 3. Fluxo de Git
 
-**Minimum code that solves the problem. Nothing speculative.**
+- Crie sua branch a partir de `development` e abra PR direto para `development`.
+- Use nomes claros em inglês para novos arquivos e diretórios.
+- **NUNCA** execute `git push` sem autorização explícita do usuário.
+- **NUNCA** edite migrations Flyway já aplicadas; crie sempre uma nova versão (`V<N>__descricao.sql`).
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+## 4. Skills Disponíveis (`.agents/skills/`)
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+Use apenas quando aplicável à tarefa (leia o `SKILL.md` antes):
+- `flyway-migrations` — criação e validação de migrations SQL.
+- `spring-data-jpa` — entidades, repositórios e consultas JPA.
+- `rest-api-conventions` — design de endpoints, status HTTP e DTOs.
+- `testing-pyramid` — testes unitários, de API e de integração.
 
-## 3. Surgical Changes
+## 5. Verificação Obrigatória
 
-**Touch only what you must. Clean up only your own mess.**
+Antes de concluir qualquer alteração de código, rode a partir de `trip.share/`:
+- Testes unitários e de API: `./mvnw test`
+- Se alterou migrations, schema, constraints ou consultas SQL (requer Docker): `./mvnw verify -Pdatabase-it`
 
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-
-## Project Instructions
-
-### Language
-
-- Respond and write project documentation in Brazilian Portuguese.
-- Keep explanations concise, with clear steps for practical tasks.
-- Preserve the names of commands, APIs, files, and technical identifiers.
-- Follow existing conventions for naming and code comments.
-- Keep third-party skills in their original language.
-
-
-
-### Workflow
-
-- Work on the current `US<N>` branch, where `N` is the user story number associated with the stage file.
-- Preserve existing changes made by the user.
-- Before editing, check whether the file already exists and whether relevant local conventions apply.
-- Prefer small, straightforward changes consistent with the project's conventions.
-- At the start of every task, check the repository's `docs/` directory.
-- Read `docs/README.md`, when available, to identify relevant documentation.
-- Before planning or editing files, read the documents relevant to the task,
-  including applicable requirements, business rules, and architectural decisions.
-- Follow links to additional documents when needed to understand the task.
-- Treat proposals and open questions as unconfirmed; do not assume they are
-  approved requirements.
-- If documentation conflicts with the implementation or the user's request,
-  report the discrepancy and clarify it when necessary.
-- Update affected documentation when an approved change alters the documented
-  behavior.
-
-### File Editing
-
-- Use clear English names for new files and directories.
-- Avoid refactoring outside the requested scope.
-- Do not remove code, files, or configuration without a clear need.
-- Add comments only when they help explain a non-obvious decision.
-
-### Verification
-
-- When changing code, run the available tests, lint checks, or validation commands relevant to the changes.
-- If automated validation is not possible, explain what was checked manually.
-- Report any limitations encountered during execution.
-
-### Delivery
-
-- Summarize the changes made.
-- Reference modified files using clear paths.
-- Suggest next steps only when they are useful.
-
-## Skills
-
-- At the start of every task, inspect the skills available in
-  `.agents/skills/`, relative to the repository root.
-- Review each skill's `name` and `description` to identify which skills
-  apply to the task and the project's stack.
-- Before performing work covered by a skill, read its full `SKILL.md`
-  and follow the applicable instructions.
-- Load referenced documents, scripts, and templates only when needed.
-- Briefly state which skills you are using and why.
-- If no skill applies, proceed using the repository's instructions.
-- Reassess applicable skills if the task's scope changes.
-- If a required skill is missing or unreadable, report the limitation
-  and do not claim to have followed it.
+Se algum comando não puder ser executado, informe explicitamente a limitação. Na entrega, resuma as alterações e liste os arquivos modificados.

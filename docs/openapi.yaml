@@ -1,55 +1,121 @@
 openapi: 3.0.3
 info:
-  title: TripShare — Gerenciamento de viagens
-  version: '1.0'
-  description: Edição e exclusão de viagens pelo proprietário.
+  title: TripShare — Rotas de viagens
+  version: '1.1'
+  description: |
+    Contrato das cinco operações de viagens implementadas no TripController.
+    Autenticação e perfis ainda possuem documentação complementar em README.md e docs/auth.md (serão consolidados aqui).
+    As descrições estão em português; campos, enums e mensagens literais preservam a API.
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local padrão; substitua pela URL do seu ambiente.
+tags:
+  - name: Viagens
+    description: Criação, edição, exclusão e consultas autorizadas pelo proprietário.
 security:
   - firebaseBearer: []
 paths:
-  /trips/{id}:
-    parameters:
-      - $ref: '#/components/parameters/tripId'
-    patch:
-      operationId: updateTrip
-      summary: Atualiza os campos informados da viagem.
+  /trips:
+    post:
+      tags: [Viagens]
+      operationId: createTrip
+      summary: Cria uma viagem e seus dias vazios.
       description: |
-        Os dias são numerados a partir de 1. Em viagens com datas fixas, alterar apenas a duração
-        ajusta a data final. Em viagens sem datas, informe ambas para definir o período.
-        A duração informada junto com datas deve corresponder ao intervalo inclusivo.
-        Ao encurtar a viagem, envie uma resolução por dia conflitante após receber 409.
-        A alteração do período e as resoluções são gravadas em uma única transação.
+        Exige perfil local ativo associado ao UID autenticado. O proprietário é obtido do token.
+        Informe as duas datas ou somente durationDays positivo. Com datas, a duração é o
+        intervalo inclusivo e deve coincidir com durationDays quando este também for enviado.
+        Datas iguais representam um dia. Uma única data é inválida.
+        Cria trips e trip_days na mesma transação, sem criar roteiros ou atividades.
+        Repetir a chamada cria outra viagem; não há chave de idempotência nem header Location.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title: {type: string, maxLength: 120, pattern: '.*\S.*'}
-                destinationId: {type: string, format: uuid}
-                startsOn: {type: string, format: date}
-                endsOn: {type: string, format: date}
-                durationDays: {type: integer, minimum: 1}
-                resolutions:
-                  type: array
-                  items:
-                    oneOf:
-                      - type: object
-                        required: [dayNumber, action, targetDay]
-                        properties:
-                          dayNumber: {type: integer, minimum: 1}
-                          action: {type: string, enum: [MOVE]}
-                          targetDay: {type: integer, minimum: 1, description: Dia mantido no novo período.}
-                      - type: object
-                        additionalProperties: false
-                        required: [dayNumber, action]
-                        properties:
-                          dayNumber: {type: integer, minimum: 1}
-                          action: {type: string, enum: [REMOVE]}
+              $ref: '#/components/schemas/CreateTripRequest'
             examples:
+              comDatas:
+                summary: Viagem com intervalo de cinco dias.
+                value:
+                  title: Férias no Rio
+                  destinationId: 20000000-0000-0000-0000-000000000001
+                  startsOn: '2027-01-10'
+                  endsOn: '2027-01-14'
+              semDatas:
+                summary: Planejamento somente por duração.
+                value:
+                  title: Cinco dias no Rio
+                  destinationId: 20000000-0000-0000-0000-000000000001
+                  durationDays: 5
+      responses:
+        '201':
+          description: Viagem e dias criados na mesma transação.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+              examples:
+                comDatas:
+                  $ref: '#/components/examples/TripWithDates'
+                semDatas:
+                  $ref: '#/components/examples/TripWithoutDates'
+        '400':
+          description: |
+            Invalid request body para JSON/DTO inválido. End date cannot be before start date
+            para datas invertidas. Trip must specify a valid date range or a positive duration
+            in days para datas incompletas, duração ausente/não positiva sem datas ou
+            duração incompatível com o intervalo. Erros do framework podem ter outro corpo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestBody'
+              example: {status: 400, message: 'Trip must specify a valid date range or a positive duration in days'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403':
+          description: Perfil suspenso (User is suspended) ou acesso negado pela segurança.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {status: 403, message: User is suspended}
+        '404':
+          description: Perfil inexistente (User profile not found) ou destino inexistente (Destination not found).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {status: 404, message: Destination not found}
+        '500': {$ref: '#/components/responses/DatabaseFailure'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /trips/{id}:
+    parameters:
+      - $ref: '#/components/parameters/tripId'
+    patch:
+      tags: [Viagens]
+      operationId: updateTrip
+      summary: Edita a viagem e resolve atividades em dias excedentes.
+      description: |
+        Exige perfil ativo e propriedade da viagem. Campos ausentes ou nulos preservam os valores;
+        um objeto vazio é aceito. Não é possível remover datas enviando null.
+        Em viagem com datas, uma nova data combina com a outra existente. Alterar somente
+        durationDays preserva o início e ajusta o término. Em viagem sem datas, envie ambas
+        para definir o período. Duração junto com datas deve corresponder ao intervalo inclusivo.
+        A expansão cria dias vazios. A redução remove dias excedentes; se houver atividades,
+        envie uma resolução por dia conflitante. A ausência de resoluções retorna 409 com conflicts.
+        MOVE transfere todas as atividades do dia, mantendo seus roteiros; REMOVE as exclui.
+        Remover a última atividade localizada de um roteiro público retorna 409 sem conflicts.
+        Período e resoluções são gravados na mesma transação. Trocar o destino não reescreve
+        as atividades existentes. Não há If-Match, ETag ou código específico de conflito otimista.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateTripRequest'}
+            examples:
+              titulo:
+                value: {title: Férias no Rio atualizadas}
               reduzir:
                 value: {durationDays: 3}
               resolver:
+                summary: Exemplo para conflitos nos dias 4 e 5; ajuste ao estado real.
                 value:
                   durationDays: 3
                   resolutions:
@@ -57,31 +123,52 @@ paths:
                     - {dayNumber: 5, action: REMOVE}
       responses:
         '200':
-          description: Viagem atualizada.
+          description: Viagem atualizada; retorna todos os campos, não apenas os alterados.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Trip'}
-        '400': {$ref: '#/components/responses/BadRequest'}
+              example:
+                id: 40000000-0000-0000-0000-000000000001
+                userId: 10000000-0000-0000-0000-000000000001
+                destinationId: 20000000-0000-0000-0000-000000000001
+                destinationName: Rio de Janeiro
+                destinationRegion: Rio de Janeiro
+                destinationCountryCode: BR
+                title: Férias no Rio atualizadas
+                startsOn: '2027-01-10'
+                endsOn: '2027-01-12'
+                durationDays: 3
+                createdAt: '2026-11-17T12:00:00Z'
+                updatedAt: '2026-11-17T12:10:00Z'
+        '400':
+          description: |
+            Invalid request body para falha do DTO/JSON. Invalid day resolutions para lista
+            incompleta, repetida, sem redução, dias não conflitantes ou targetDay inválido.
+            Trip must specify a valid date range or a positive duration in days para definição
+            incompleta de datas em viagem sem datas ou dia necessário à resolução inexistente.
+            End date cannot be before start date para datas invertidas OU duração incompatível
+            com as datas; essa mensagem é reutilizada pela implementação.
+            UUID inválido no caminho gera erro do framework com corpo não padronizado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BadRequestBody'}
+              example: {status: 400, message: Invalid day resolutions}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
-        '404': {$ref: '#/components/responses/NotFound'}
+        '404':
+          description: Perfil, viagem ou novo destino inexistente (User profile not found, Trip not found ou Destination not found).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {status: 404, message: Destination not found}
         '409':
-          description: O novo período exige resolver atividades ou a remoção inviabilizaria uma publicação.
+          description: Dias excedentes com atividades sem resolução ou remoção que inviabiliza roteiro público.
           content:
             application/json:
               schema:
-                allOf:
+                anyOf:
+                  - $ref: '#/components/schemas/PeriodConflict'
                   - $ref: '#/components/schemas/Error'
-                  - type: object
-                    properties:
-                      conflicts:
-                        type: array
-                        items:
-                          type: object
-                          required: [dayNumber, activityCount]
-                          properties:
-                            dayNumber: {type: integer}
-                            activityCount: {type: integer, format: int64}
               examples:
                 diasExcedentes:
                   value:
@@ -92,47 +179,66 @@ paths:
                       - {dayNumber: 5, activityCount: 1}
                 publicacao:
                   value: {status: 409, message: A public itinerary needs an activity with an identified location}
+        '500': {$ref: '#/components/responses/DatabaseFailure'}
+        '503': {$ref: '#/components/responses/Unavailable'}
     delete:
+      tags: [Viagens]
       operationId: deleteTrip
       summary: Exclui a viagem inteira e seus dependentes após confirmação.
       description: |
-        Envie DELETE /trips/{id}?confirm=true para confirmar. A exclusão abrange todos os roteiros,
-        inclusive os de outras páginas da prévia. Para cancelar, encerre a consulta à prévia.
+        Exige perfil ativo e propriedade. A confirmação é o valor literal true na query.
+        A consulta à prévia não é obrigatória nem reserva o estado da viagem.
+        A exclusão alcança todos os roteiros atuais, inclusive os de outras páginas da prévia.
+        Dias, atividades e dependentes são removidos por cascatas na mesma transação.
+        Cópias em outras viagens são preservadas com source_itinerary_id nulo.
+        Não remove arquivos de armazenamento externo. Repetir após sucesso retorna 404.
       parameters:
         - name: confirm
           in: query
           required: true
-          description: A confirmação exige o valor literal true.
+          description: |
+            Obrigatório para concluir a exclusão. Ausência ou qualquer valor diferente de
+            true, incluindo TRUE, false, 1 e vazio, retorna 400 após validar a propriedade.
           schema: {type: string, enum: ['true']}
           example: 'true'
       responses:
-        '204': {description: Viagem e vínculos excluídos na mesma transação.}
-        '400': {$ref: '#/components/responses/BadRequest'}
+        '204':
+          description: Viagem e dependentes excluídos; resposta sem corpo.
+        '400':
+          description: Trip deletion requires explicit confirmation; UUID inválido gera erro do framework.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BadRequestBody'}
+              example: {status: 400, message: Trip deletion requires explicit confirmation}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/DatabaseFailure'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /trips/{id}/delete-preview:
     parameters:
       - $ref: '#/components/parameters/tripId'
     get:
+      tags: [Viagens]
       operationId: previewTripDeletion
-      summary: Lista os roteiros e vínculos afetados pela exclusão.
-      description: Ordenação crescente por título e UUID. A consulta inclui os roteiros privados da viagem.
+      summary: Lista roteiros e vínculos afetados pela exclusão.
+      description: |
+        Exige perfil ativo e propriedade da viagem. Inclui roteiros privados, públicos e
+        ocultados por moderação. Ordenação crescente por título e UUID.
+        favoriteCount conta favoritos. published indica visibilidade PUBLIC; inRanking
+        indica presença na view public_itineraries, não uma posição ou participação em top N.
+        Não contabiliza todas as tabelas afetadas pela exclusão. Usa REPEATABLE_READ por chamada,
+        sem reservar dados para a exclusão ou manter uma fotografia entre páginas.
+        Página sem resultados retorna 200, content vazio, totais e last verdadeiro.
       parameters:
-        - name: page
-          in: query
-          schema: {type: integer, format: int32, minimum: 0, default: 0}
-        - name: size
-          in: query
-          description: Valores maiores que 100 são aceitos e ajustados para 100.
-          schema: {type: integer, format: int32, minimum: 1, default: 20}
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/size'
       responses:
         '200':
-          description: A página solicitada e os totais da viagem. Páginas sem resultados têm conteúdo vazio.
+          description: Página de roteiros e totais da viagem.
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/DeletePreview'
+              schema: {$ref: '#/components/schemas/DeletePreview'}
               example:
                 content:
                   - id: 60000000-0000-0000-0000-000000000001
@@ -145,80 +251,353 @@ paths:
                 totalElements: 1
                 totalPages: 1
                 last: true
-        '400': {$ref: '#/components/responses/BadRequest'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/DatabaseFailure'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /trips/{id}/places:
+    parameters:
+      - $ref: '#/components/parameters/tripId'
+    get:
+      tags: [Viagens]
+      operationId: getTripPlaces
+      summary: Lista lugares do catálogo local do destino da viagem.
+      description: |
+        Exige perfil ativo e propriedade da viagem. Consulta places pelo destino da viagem
+        e removed_at nulo, ordenando por nome e UUID crescentes.
+        Não lista atividades dos roteiros, não chama Foursquare ou outro provedor e não importa dados.
+        Dados desconhecidos permanecem nulos. Não há busca, filtros adicionais ou ordenação configurável.
+        Página vazia retorna 200 com totais. Consulta somente de leitura com isolamento padrão.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/size'
+      responses:
+        '200':
+          description: Página de lugares disponíveis no catálogo local do destino.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TripPlaces'}
+              examples:
+                comLugar:
+                  value:
+                    content:
+                      - id: 30000000-0000-0000-0000-000000000001
+                        name: Museu de exemplo
+                        address: Rua Exemplo, 100
+                        neighborhood: Centro
+                        description: Museu de história local
+                        latitude: -22.9068
+                        longitude: -43.1729
+                        estimatedVisitMinutes: 90
+                        estimatedCost: 25.50
+                        currency: BRL
+                    page: 0
+                    size: 20
+                    totalElements: 1
+                    totalPages: 1
+                    last: true
+                vazio:
+                  value: {content: [], page: 2, size: 10, totalElements: 0, totalPages: 0, last: true}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/DatabaseFailure'}
+        '503': {$ref: '#/components/responses/Unavailable'}
 components:
   securitySchemes:
-    firebaseBearer: {type: http, scheme: bearer, bearerFormat: Firebase ID token}
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+      description: ID token obtido no Firebase; UID precisa estar associado a perfil local ativo.
   parameters:
     tripId:
       name: id
       in: path
       required: true
+      description: UUID interno da viagem, não do usuário nem do destino.
       schema: {type: string, format: uuid}
+      example: 40000000-0000-0000-0000-000000000001
+    page:
+      name: page
+      in: query
+      description: Índice da página, começando em zero. Ausente ou vazio usa zero.
+      schema: {type: integer, format: int32, minimum: 0, default: 0}
+    size:
+      name: size
+      in: query
+      description: Quantidade solicitada; ausente ou vazia usa 20. Valores acima de 100 são aceitos e ajustados para 100.
+      schema: {type: integer, format: int32, minimum: 1, default: 20}
   responses:
-    BadRequest:
-      description: Parâmetros, período, resoluções ou confirmação inválidos.
+    InvalidPagination:
+      description: Invalid pagination parameters para page negativo ou size menor que 1; UUID e inteiros não conversíveis geram erros do framework.
       content:
         application/json:
-          schema: {$ref: '#/components/schemas/Error'}
+          schema: {$ref: '#/components/schemas/BadRequestBody'}
+          example: {status: 400, message: Invalid pagination parameters}
     Unauthorized:
-      description: Token Firebase ausente ou inválido.
+      description: Firebase Bearer token is required para token ausente/malformado; Invalid Firebase token para token inválido ou expirado.
+      headers:
+        WWW-Authenticate:
+          description: Esquema de autenticação exigido.
+          schema: {type: string, enum: [Bearer]}
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            ausente:
+              value: {status: 401, message: Firebase Bearer token is required}
+            invalido:
+              value: {status: 401, message: Invalid Firebase token}
     Forbidden:
-      description: Perfil suspenso ou viagem de outro proprietário.
+      description: User is suspended para perfil suspenso; You do not own this trip para outro proprietário; Access denied para recusa pela segurança.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
+          example: {status: 403, message: You do not own this trip}
     NotFound:
-      description: Viagem, perfil ou destino informado na edição inexistente.
+      description: User profile not found para UID sem perfil; Trip not found para viagem inexistente ou já excluída.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
+          example: {status: 404, message: Trip not found}
+    DatabaseFailure:
+      description: Violação de integridade capturada sem tratamento específico; alterações da transação são revertidas.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {status: 500, message: Database operation failed}
+    Unavailable:
+      description: Falha capturada no acesso ao banco ou indisponibilidade da validação Firebase.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            banco:
+              value: {status: 503, message: Database operation unavailable}
+            autenticacao:
+              value: {status: 503, message: Firebase authentication unavailable}
   schemas:
+    CreateTripRequest:
+      type: object
+      required: [title, destinationId]
+      description: |
+        Informe startsOn e endsOn não nulos juntos, ou durationDays positivo sem datas.
+        Duração enviada com datas deve coincidir com o intervalo inclusivo. Essas condições
+        entre campos são verificadas pelo serviço e não são integralmente expressas pelo schema.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          pattern: '\S'
+          description: Título não branco, salvo com trim(); criação sem limite explícito de tamanho.
+        destinationId:
+          type: string
+          format: uuid
+          description: UUID de destino cadastrado.
+        startsOn:
+          type: string
+          format: date
+          nullable: true
+          description: Data inicial; exige data final quando não nula.
+        endsOn:
+          type: string
+          format: date
+          nullable: true
+          description: Data final, igual ou posterior à inicial.
+        durationDays:
+          type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+          description: Duração positiva, obrigatória sem datas; com datas deve corresponder ao intervalo inclusivo.
+    UpdateTripRequest:
+      type: object
+      description: Todos os campos são opcionais; null equivale a omissão. O objeto vazio é aceito.
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 120
+          pattern: '.*\S.*'
+          description: Título não branco; limite validado antes de trim(). O DTO usa correspondência integral do padrão Java, rejeitando também quebras de linha.
+        destinationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Novo destino existente; não reescreve lugares das atividades salvas.
+        startsOn:
+          type: string
+          format: date
+          nullable: true
+          description: Nova data inicial; null preserva a atual.
+        endsOn:
+          type: string
+          format: date
+          nullable: true
+          description: Nova data final; null preserva a atual.
+        durationDays:
+          type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+          description: Nova duração; sozinha ajusta o término quando já há datas.
+        resolutions:
+          type: array
+          nullable: true
+          description: Uma resolução por dia conflitante ao reduzir a duração; ausente, null ou lista vazia significa nenhuma resolução.
+          items:
+            $ref: '#/components/schemas/DayResolution'
+    DayResolution:
+      oneOf:
+        - type: object
+          required: [dayNumber, action, targetDay]
+          properties:
+            dayNumber: {type: integer, format: int32, minimum: 1, description: "Dia excedente com atividades."}
+            action: {type: string, enum: [MOVE], description: "Move todas as atividades do dia, preservando seus roteiros."}
+            targetDay: {type: integer, format: int32, minimum: 1, description: "Dia mantido; não pode exceder a nova duração."}
+        - type: object
+          required: [dayNumber, action]
+          properties:
+            dayNumber: {type: integer, format: int32, minimum: 1, description: "Dia excedente com atividades."}
+            action: {type: string, enum: [REMOVE], description: "Exclui todas as atividades do dia."}
+            targetDay:
+              type: integer
+              nullable: true
+              enum: [null]
+              description: Deve estar ausente ou ser null para REMOVE.
     Error:
       type: object
       required: [status, message]
       properties:
-        status: {type: integer}
-        message: {type: string}
-    DeletePreview:
+        status: {type: integer, description: "Código HTTP da resposta."}
+        message: {type: string, description: "Mensagem literal atual, em inglês; não existe campo code."}
+    BadRequestBody:
       type: object
-      required: [content, page, size, totalElements, totalPages, last]
+      description: |
+        Erros tratados pelo projeto usam Error (status e message). Erros de conversão de
+        parâmetros/caminho são tratados pelo Spring e não têm envelope garantido; por isso
+        nenhum campo é obrigatório neste schema. Consulte as descrições e exemplos da operação.
+      additionalProperties: true
+    PeriodConflict:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [conflicts]
+          properties:
+            conflicts:
+              type: array
+              description: Dias excedentes com atividades, em ordem crescente; total considera todos os roteiros da viagem.
+              items:
+                type: object
+                required: [dayNumber, activityCount]
+                properties:
+                  dayNumber: {type: integer, format: int32, minimum: 1}
+                  activityCount: {type: integer, format: int64, minimum: 1}
+    Pagination:
+      type: object
+      required: [page, size, totalElements, totalPages, last]
       properties:
-        content:
-          type: array
-          items:
-            type: object
-            required: [id, title, published, favoriteCount, inRanking]
-            properties:
-              id: {type: string, format: uuid}
-              title: {type: string}
-              published: {type: boolean, description: Indica que a visibilidade do roteiro é pública.}
-              favoriteCount: {type: integer, format: int64, minimum: 0}
-              inRanking: {type: boolean, description: Indica presença no ranking público atual.}
-        page: {type: integer, minimum: 0}
-        size: {type: integer, minimum: 1, maximum: 100}
-        totalElements: {type: integer, format: int64, minimum: 0}
-        totalPages: {type: integer, format: int64, minimum: 0}
-        last: {type: boolean}
+        page: {type: integer, format: int32, minimum: 0, description: "Índice solicitado."}
+        size: {type: integer, format: int32, minimum: 1, maximum: 100, description: "Tamanho efetivo após aplicação do limite."}
+        totalElements: {type: integer, format: int64, minimum: 0, description: "Total de itens que atendem ao filtro."}
+        totalPages: {type: integer, format: int64, minimum: 0, description: "Quantidade total de páginas; zero sem itens."}
+        last: {type: boolean, description: "Não há uma página posterior com resultados."}
+    DeletePreview:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/ItineraryImpact'
+    ItineraryImpact:
+      type: object
+      required: [id, title, published, favoriteCount, inRanking]
+      properties:
+        id: {type: string, format: uuid, description: "UUID do roteiro."}
+        title: {type: string, description: "Título do roteiro."}
+        published: {type: boolean, description: "Visibilidade PUBLIC, mesmo se ocultado por moderação."}
+        favoriteCount: {type: integer, format: int64, minimum: 0, description: "Quantidade de favoritos vinculados ao roteiro."}
+        inRanking: {type: boolean, description: "Presença na view public_itineraries; não indica posição nem top N."}
+    TripPlaces:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/Place'
+            totalPages:
+              type: integer
+              format: int32
+              minimum: 0
+              description: Quantidade total de páginas retornada pelo Spring Data.
+    Place:
+      type: object
+      required: [id, name, address, neighborhood, description, latitude, longitude, estimatedVisitMinutes, estimatedCost, currency]
+      properties:
+        id: {type: string, format: uuid, description: "UUID do lugar no catálogo."}
+        name: {type: string, description: "Nome do lugar."}
+        address: {type: string, nullable: true, description: "Endereço cadastrado."}
+        neighborhood: {type: string, nullable: true, description: "Bairro."}
+        description: {type: string, nullable: true, description: "Descrição do lugar."}
+        latitude: {type: number, nullable: true, minimum: -90, maximum: 90, description: "Latitude em graus decimais."}
+        longitude: {type: number, nullable: true, minimum: -180, maximum: 180, description: "Longitude em graus decimais."}
+        estimatedVisitMinutes: {type: integer, format: int32, nullable: true, description: "Duração estimada em minutos; null quando desconhecida."}
+        estimatedCost: {type: number, nullable: true, description: "Custo estimado; null quando desconhecido."}
+        currency: {type: string, nullable: true, minLength: 3, maxLength: 3, description: "Código da moeda, como BRL; null se não houver custo conhecido."}
     Trip:
       type: object
       required: [id, userId, destinationId, destinationName, destinationRegion, destinationCountryCode, title, startsOn, endsOn, durationDays, createdAt, updatedAt]
       properties:
-        id: {type: string, format: uuid}
-        userId: {type: string, format: uuid}
-        destinationId: {type: string, format: uuid}
-        destinationName: {type: string}
-        destinationRegion: {type: string, nullable: true}
-        destinationCountryCode: {type: string}
-        title: {type: string}
-        startsOn: {type: string, format: date, nullable: true}
-        endsOn: {type: string, format: date, nullable: true}
-        durationDays: {type: integer}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
+        id: {type: string, format: uuid, description: "UUID da viagem."}
+        userId: {type: string, format: uuid, description: "UUID interno do proprietário, não o UID Firebase."}
+        destinationId: {type: string, format: uuid, description: "UUID do destino cadastrado."}
+        destinationName: {type: string, description: "Nome do destino."}
+        destinationRegion: {type: string, nullable: true, description: "Região do destino quando cadastrada."}
+        destinationCountryCode: {type: string, minLength: 2, maxLength: 2, description: "Código do país com duas letras."}
+        title: {type: string, description: "Título salvo após trim()."}
+        startsOn: {type: string, format: date, nullable: true, description: "Início da viagem; null no planejamento somente por duração."}
+        endsOn: {type: string, format: date, nullable: true, description: "Término da viagem; null no planejamento somente por duração."}
+        durationDays: {type: integer, format: int32, minimum: 1, description: "Duração inclusiva em dias."}
+        createdAt: {type: string, format: date-time, description: "Instante da criação."}
+        updatedAt: {type: string, format: date-time, description: "Instante da última alteração."}
+  examples:
+    TripWithDates:
+      summary: Viagem com datas fixas.
+      value:
+        id: 40000000-0000-0000-0000-000000000001
+        userId: 10000000-0000-0000-0000-000000000001
+        destinationId: 20000000-0000-0000-0000-000000000001
+        destinationName: Rio de Janeiro
+        destinationRegion: Rio de Janeiro
+        destinationCountryCode: BR
+        title: Férias no Rio
+        startsOn: '2027-01-10'
+        endsOn: '2027-01-14'
+        durationDays: 5
+        createdAt: '2026-11-17T12:00:00Z'
+        updatedAt: '2026-11-17T12:00:00Z'
+    TripWithoutDates:
+      summary: Viagem planejada somente por duração.
+      value:
+        id: 40000000-0000-0000-0000-000000000002
+        userId: 10000000-0000-0000-0000-000000000001
+        destinationId: 20000000-0000-0000-0000-000000000001
+        destinationName: Rio de Janeiro
+        destinationRegion: null
+        destinationCountryCode: BR
+        title: Cinco dias no Rio
+        startsOn: null
+        endsOn: null
+        durationDays: 5
+        createdAt: '2026-11-17T12:00:00Z'
+        updatedAt: '2026-11-17T12:00:00Z'

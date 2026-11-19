@@ -220,4 +220,4 @@ erDiagram
 | 16 | Atividades por turno | Timeline e modos de visualização |
 | 17 | Coordenadas e posição das atividades | Renderização e fallback do mapa |
 
-O dicionário completo de colunas, tipos, valores padrão e constraints está em [database-dictionary.md](database-dictionary.md).
+Para definições exatas de colunas, tipos, defaults e constraints, consulte as migrations SQL em `trip.share/src/main/resources/db/migration/`.

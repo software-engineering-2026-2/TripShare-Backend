@@ -1,6 +1,0 @@
-FROM eclipse-temurin:21
-COPY . /app
-WORKDIR /app
-RUN ./mvnw package
-ENV DATABASE_PASSWORD=production-secret
-ENTRYPOINT ["java", "-jar", "target/app.jar"]
